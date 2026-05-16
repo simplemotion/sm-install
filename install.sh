@@ -238,10 +238,16 @@ ensure_gh() {
     local local_gh="${gh_dir}/gh"
     printf '  [%s*%s] Bootstrapping gh (kept at %s/gh for future runs)...\n' "$DIM" "$RESET" "$gh_dir"
     local gh_tag gh_ver gh_os gh_arch gh_ext gh_asset gh_url gh_sums_url gh_tmp gh_sums_tmp gh_expected gh_actual
+    # Try the live cli/cli releases API first; fall back to a known-good
+    # pinned version if it fails (anonymous API rate-limit is 60/hr/IP and
+    # easy to hit when this script runs alongside other gh-using tooling).
+    # Bump the fallback periodically.
+    local GH_PIN="v2.89.0"
     gh_tag=$(curl -fsSL "https://api.github.com/repos/cli/cli/releases/latest" 2>/dev/null \
         | awk -F'"' '/"tag_name":/ {print $4; exit}') || gh_tag=""
     if [[ -z "$gh_tag" ]]; then
-        printf '  [%s-%s] gh bootstrap skipped (cli/cli release lookup failed)\n' "$DIM" "$RESET"; return 1
+        printf '  [%s-%s] cli/cli release lookup failed (rate-limited?); using pinned %s\n' "$DIM" "$RESET" "$GH_PIN"
+        gh_tag="$GH_PIN"
     fi
     gh_ver="${gh_tag#v}"
     case "$OS" in
