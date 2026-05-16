@@ -37,7 +37,7 @@ This repo contains **no binaries**. It is the routing layer between consumers an
 
 ## DNS / Pages
 
-`install.simplemotion.com` is served from this repo's **`main`** branch (Pages source = main, path /, HTTPS enforced) via the `CNAME` file at repo root. The legacy `get.simplemotion.com` vanity remains on `simplemotion/sm-get` during transition and will be retired once we're confident the new flow handles all in-flight installs. The `sm-welcome/index.html` landing page lives alongside the installers; there is no `gh-pages` branch.
+`install.simplemotion.com` is served from this repo's **`main`** branch (Pages source = main, path /, HTTPS enforced) via the `CNAME` file at repo root. The `sm-welcome/index.html` landing page lives alongside the installers; there is no `gh-pages` branch. The legacy `get.simplemotion.com` / `simplemotion/sm-get` vanity was retired on 2026-05-16.
 
 ## When in doubt, ask
 
