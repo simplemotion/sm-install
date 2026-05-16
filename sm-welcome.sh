@@ -29,7 +29,10 @@ printf '\n  SimpleMotion — Development Environment Onboarding\n  ════�
 # steps via env vars the binary reads (banner suppression + offset).
 export SM_WELCOME_NO_BANNER=1
 export SM_WELCOME_STEPS_OFFSET=5
-export SM_WELCOME_STEPS_TOTAL=20
+# Binary has 14 internal steps (00-preflight through 14-reload-shell);
+# bootstrap contributes 5 silent steps. 5 + 14 = 19.
+# Update if the binary's step count changes.
+export SM_WELCOME_STEPS_TOTAL=19
 
 # Pre-parse our own flags: --channel goes to install.sh; everything
 # else forwards to the sm-welcome binary. SM_CHANNEL env var also
