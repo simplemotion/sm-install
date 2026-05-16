@@ -22,6 +22,11 @@
 
 set -uo pipefail
 
+# Mirror install.sh's PATH prepend so we find any gh that install.sh
+# bootstrapped into ~/.local/bin or ~/.simplemotion/bin, even if those
+# dirs aren't on the user's interactive shell PATH yet.
+export PATH="$HOME/.simplemotion/bin:$HOME/.local/bin:$PATH"
+
 CHANNEL="${1:-preview}"
 TAG="${2:-v0.1.26-preview-002}"
 TRIPLE="${3:-aarch64-apple-darwin}"
