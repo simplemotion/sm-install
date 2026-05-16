@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## What this repo is
 
-`simplemotion/install` is the **public** installer-script home for SimpleMotion binary distribution. It hosts the shell installers consumers fetch via `curl | bash` or `irm | iex`, plus the landing page served at `get.simplemotion.com`.
+`simplemotion/install` is the **public** installer-script home for SimpleMotion binary distribution. It hosts the shell installers consumers fetch via `curl | bash` or `irm | iex`, plus the landing page served at `install.simplemotion.com`.
 
 This repo contains **no binaries**. It is the routing layer between consumers and the four channel repos that host actual release assets.
 
@@ -37,7 +37,7 @@ This repo contains **no binaries**. It is the routing layer between consumers an
 
 ## DNS / Pages
 
-`get.simplemotion.com` will be served from this repo's **`main`** branch (Pages source = main, path /, HTTPS enforced) once the CNAME flip from `simplemotion/sm-get` lands. The `CNAME` file and `sm-welcome/index.html` landing page live alongside the installers. There is no `gh-pages` branch.
+`install.simplemotion.com` is served from this repo's **`main`** branch (Pages source = main, path /, HTTPS enforced) via the `CNAME` file at repo root. The legacy `get.simplemotion.com` vanity remains on `simplemotion/sm-get` during transition and will be retired once we're confident the new flow handles all in-flight installs. The `sm-welcome/index.html` landing page lives alongside the installers; there is no `gh-pages` branch.
 
 ## When in doubt, ask
 

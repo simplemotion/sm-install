@@ -4,7 +4,7 @@
 
 ## What this repo serves
 
-This is the **public** installer-script home for SimpleMotion binary distribution, served at `get.simplemotion.com` (GitHub Pages on `main`). It hosts:
+This is the **public** installer-script home for SimpleMotion binary distribution, served at `install.simplemotion.com` (GitHub Pages on `main`). It hosts:
 
 - `install.sh` / `install.ps1` — generic installer base (resolves channel → repo, downloads, verifies, installs).
 - `sm-welcome.sh` / `sm-welcome.ps1` — onboarding-CLI wrapper.
@@ -15,7 +15,7 @@ Binaries themselves are **not** stored here. They live in `simplemotion/{release
 
 ## Threat model
 
-- **Adversary substitutes the installer.** GitHub serves `*.sh` / `*.ps1` over TLS; consumers pinned to `get.simplemotion.com` get the CNAME-anchored repo.
+- **Adversary substitutes the installer.** GitHub serves `*.sh` / `*.ps1` over TLS; consumers pinned to `install.simplemotion.com` get the CNAME-anchored repo.
 - **Adversary substitutes the binary.** Mitigated by SHA verification of the published `.sha256` sidecar and by sigstore build-provenance verification against the per-product source repo (e.g., `3400-0000-SM-Software/3400-0009-SM-Welcome` for `sm-welcome`).
 - **Adversary publishes a malicious preview release.** Preview channel is documented as early-access and may regress. `release` channel consumers are unaffected because they pull from a different repo entirely (`simplemotion/release` vs `simplemotion/preview`).
 - **Adversary smuggles a binary into a private channel.** Internal channels (`private`, `testing`) require authed `gh` with read access to the relevant private repo; external attackers without SimpleMotion credentials cannot reach those release assets.

@@ -2,7 +2,7 @@
 
 Installer scripts for [SimpleMotion](https://simplemotion.com) binary products. One command installs the SimpleMotion CLIs.
 
-This is the public bootstrap entry point served at **`get.simplemotion.com`**. Binaries themselves live in four channel-specific repos:
+This is the public bootstrap entry point served at **`install.simplemotion.com`**. Binaries themselves live in four channel-specific repos:
 
 | Channel | Repo | Visibility | Audience |
 |---|---|---|---|
@@ -19,13 +19,13 @@ Each channel repo has its own `releases/latest` namespace, so channel selection 
 
 ```bash
 # release channel (stable)
-bash -c "$(curl -fsSL https://get.simplemotion.com/sm-welcome.sh)" sm-welcome
+bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome
 
 # preview channel (early access)
-bash -c "$(curl -fsSL https://get.simplemotion.com/sm-welcome.sh)" sm-welcome --channel preview
+bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome --channel preview
 
 # private channel (SimpleMotion internal)
-bash -c "$(curl -fsSL https://get.simplemotion.com/sm-welcome.sh)" sm-welcome --channel private
+bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome --channel private
 ```
 
 The `bash -c "$(curl …)"` form (rather than `curl … | bash`) is required so the installer can read interactive prompts from your terminal.
@@ -34,10 +34,10 @@ The `bash -c "$(curl …)"` form (rather than `curl … | bash`) is required so 
 
 ```powershell
 # release channel (stable)
-irm https://get.simplemotion.com/sm-welcome.ps1 | iex
+irm https://install.simplemotion.com/sm-welcome.ps1 | iex
 
 # preview channel
-$env:SM_CHANNEL='preview'; irm https://get.simplemotion.com/sm-welcome.ps1 | iex
+$env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 | iex
 ```
 
 ## Install — sm-simplicity (Simplicity product)
@@ -45,7 +45,7 @@ $env:SM_CHANNEL='preview'; irm https://get.simplemotion.com/sm-welcome.ps1 | iex
 ### macOS / Linux
 
 ```bash
-curl -fsSL https://get.simplemotion.com/sm-simplicity.sh | bash
+curl -fsSL https://install.simplemotion.com/sm-simplicity.sh | bash
 ```
 
 Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_DIR=/some/path`.

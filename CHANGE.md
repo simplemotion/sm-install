@@ -4,7 +4,7 @@ Changelog for this repo (`simplemotion/install`).
 
 Versioning follows the SimpleMotion enterprise policy — `vX.Y.Z` releases, `vX.Y.Z-preview-NNN` candidates, `vX.Y.Z-cm-NNN` dev builds. Only releases and RCs are recorded here. **Full policy is in the appendix at the end of this file.**
 
-This repo holds the installer scripts served at `get.simplemotion.com`. The scripts route consumers to the appropriate channel repo (`simplemotion/release` / `preview` / `private` / `testing`) based on `--channel`. Binaries themselves are not stored here.
+This repo holds the installer scripts served at `install.simplemotion.com`. The scripts route consumers to the appropriate channel repo (`simplemotion/release` / `preview` / `private` / `testing`) based on `--channel`. Binaries themselves are not stored here.
 
 ---
 
