@@ -178,8 +178,13 @@ fi
 
 TMPBIN=$(mktemp)
 TMPSUM=$(mktemp)
-TMPATT=$(mktemp)
-trap 'rm -f "$TMPBIN" "$TMPSUM" "$TMPATT"' EXIT
+# `gh attestation verify --bundle` rejects any file whose extension
+# isn't `.json` or `.jsonl` (with "Error: bundle file extension not
+# supported"), so a bare mktemp path won't work. Append the canonical
+# sigstore-bundle suffix; clean up both the suffixed and bare paths.
+TMPATT_RAW=$(mktemp)
+TMPATT="${TMPATT_RAW}.sigstore.jsonl"
+trap 'rm -f "$TMPBIN" "$TMPSUM" "$TMPATT" "$TMPATT_RAW"' EXIT
 
 # Phase header — matches sm-welcome's `phase_header` formatting so the
 # bootstrap output frames as one continuous workflow. Rule width is
