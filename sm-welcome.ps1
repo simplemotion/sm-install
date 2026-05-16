@@ -2,8 +2,8 @@
 # Thin wrapper around install.ps1 — fetches sm-welcome and execs it.
 #
 # Usage:
-#   irm https://get.simplemotion.com/sm-welcome.ps1 | iex
-#   $env:SM_CHANNEL='preview'; irm https://get.simplemotion.com/sm-welcome.ps1 | iex
+#   irm https://install.simplemotion.com/sm-welcome.ps1 | iex
+#   $env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 | iex
 #
 # Fast path: if %USERPROFILE%\.simplemotion\bin\sm-welcome.exe already
 # exists, the script consults the GitHub Releases API for the latest
@@ -91,7 +91,7 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
     }
 }
 
-$installer = (New-Object Net.WebClient).DownloadString('https://get.simplemotion.com/install.ps1')
+$installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/install.ps1')
 $sb = [ScriptBlock]::Create($installer)
 & $sb -Package 'sm-welcome' `
       -SourceRepo '3400-0000-SM-Software/3400-0009-SM-Welcome' `

@@ -142,7 +142,7 @@
       if (email) prefix.push('$env:SM_EMAIL="' + email + '"');
       prefix.push('$env:SM_CHANNEL="' + channel + '"');
       return {
-        head: 'irm https://get.simplemotion.com/sm-welcome.ps1 | iex',
+        head: 'irm https://install.simplemotion.com/sm-welcome.ps1 | iex',
         tail: '',
         leading: prefix.join('; ') + '; '
       };
@@ -151,7 +151,7 @@
     if (email) args += '--email ' + email + ' ';
     args += '--channel ' + channel;
     return {
-      head: 'curl -fsSL https://get.simplemotion.com/sm-welcome.sh | bash -s --',
+      head: 'curl -fsSL https://install.simplemotion.com/sm-welcome.sh | bash -s --',
       tail: args,
       leading: ''
     };

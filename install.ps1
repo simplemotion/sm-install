@@ -5,7 +5,7 @@
 # installs it to PATH or execs it from a temp file.
 #
 # Usage (typically called by a thin per-product wrapper):
-#   irm "https://get.simplemotion.com/install.ps1" |
+#   irm "https://install.simplemotion.com/install.ps1" |
 #     iex "& { $input | Out-Null }; install.ps1 -Repo ... -Package ..."
 #
 # More commonly invoked indirectly via a per-product wrapper that pipes

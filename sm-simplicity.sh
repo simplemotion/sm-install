@@ -4,8 +4,8 @@
 #
 # Usage (command substitution avoids the curl: (56) race that pipe-into-
 # bash forms produce when install.sh hits its trailing `exec`):
-#   bash -c "$(curl -fsSL https://get.simplemotion.com/sm-simplicity.sh)" sm-simplicity
-#   SM_CHANNEL=preview bash -c "$(curl -fsSL https://get.simplemotion.com/sm-simplicity.sh)" sm-simplicity
+#   bash -c "$(curl -fsSL https://install.simplemotion.com/sm-simplicity.sh)" sm-simplicity
+#   SM_CHANNEL=preview bash -c "$(curl -fsSL https://install.simplemotion.com/sm-simplicity.sh)" sm-simplicity
 #
 # Channel selection via SM_CHANNEL (release | preview); default release.
 # Tier selection (one/two/six) happens at runtime via `sm-simplicity` args.
@@ -14,7 +14,7 @@ set -euo pipefail
 
 printf '\n  SimpleMotion — Simplicity Installer\n  ═══════════════════════════════════\n\n'
 
-INSTALL_SH=$(curl -fsSL "https://get.simplemotion.com/install.sh")
+INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/install.sh")
 exec bash -c "$INSTALL_SH" install \
     --package sm-simplicity \
     --source-repo 3400-0000-SM-Software/3400-0026-SM-Simplicity \

@@ -6,9 +6,9 @@
 # the trailing `exec` never closes a still-active curl pipe — the (56)
 # 'Failure writing output' message that pipe/process-sub forms emit is
 # gone):
-#   bash -c "$(curl -fsSL https://get.simplemotion.com/sm-welcome.sh)" sm-welcome
-#   bash -c "$(curl -fsSL https://get.simplemotion.com/sm-welcome.sh)" sm-welcome --email me@example.com
-#   SM_CHANNEL=preview bash -c "$(curl -fsSL https://get.simplemotion.com/sm-welcome.sh)" sm-welcome
+#   bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome
+#   bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome --email me@example.com
+#   SM_CHANNEL=preview bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome
 #
 # Channel selection via SM_CHANNEL (release | preview); default release.
 #
@@ -100,7 +100,7 @@ fi
 # Buffer install.sh into a variable (curl finishes BEFORE bash starts),
 # then exec bash -c on the captured script. No FIFO, no race with the
 # trailing exec inside install.sh — no curl (56) warning.
-INSTALL_SH=$(curl -fsSL "https://get.simplemotion.com/install.sh")
+INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/install.sh")
 exec bash -c "$INSTALL_SH" install \
     --package sm-welcome \
     --source-repo 3400-0000-SM-Software/3400-0009-SM-Welcome \
