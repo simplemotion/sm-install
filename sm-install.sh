@@ -338,9 +338,43 @@ fi
 
 chmod +x "$TMPBIN"
 
+# Install-receipt: a per-package TOML at `~/.simplemotion/install-receipt/<package>.toml`
+# recording the channel, tag, source-repo, asset SHA, and timestamp of
+# this install. Consumed by the binary's own `update` subcommand so
+# subsequent refreshes target the channel the user actually installed
+# from (instead of defaulting to `release` and downgrading users on
+# `preview`/`private`/`testing`). Written best-effort: failure to create
+# the receipt is logged but does not abort the install.
+write_receipt() {
+    local pkg="$1" channel="$2" tag="$3" source_repo="$4" sha="$5"
+    local dir="$HOME/.simplemotion/install-receipt"
+    local file="$dir/$pkg.toml"
+    local ts
+    # ISO-8601 UTC; portable across BSD `date` (macOS) and GNU `date` (Linux).
+    ts=$(date -u +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null) || ts="unknown"
+    if ! mkdir -p "$dir" 2>/dev/null; then
+        printf '  [%s!%s] could not create %s — receipt skipped\n' "$DIM" "$RESET" "$dir" >&2
+        return 0
+    fi
+    if ! cat > "$file" <<EOF
+schema       = 1
+package      = "$pkg"
+channel      = "$channel"
+tag          = "$tag"
+source_repo  = "$source_repo"
+asset_sha256 = "$sha"
+installed_at = "$ts"
+installer    = "sm-install.sh"
+EOF
+    then
+        printf '  [%s!%s] could not write %s — receipt skipped\n' "$DIM" "$RESET" "$file" >&2
+    fi
+}
+
 install_to_dir() {
     mkdir -p "$INSTALL_DIR"
     install -m 0755 "$TMPBIN" "${INSTALL_DIR}/${PACKAGE}"
+    write_receipt "$PACKAGE" "$CHANNEL" "$TAG" "$SOURCE_REPO" "$actual"
     printf '  [%s✓%s] %s Installed %s to %s/%s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$PACKAGE" "$INSTALL_DIR" "$PACKAGE"
     case ":$PATH:" in
         *":$INSTALL_DIR:"*) ;;

@@ -282,12 +282,53 @@ if ($ghBin) {
     Write-Host ("  [-] {0} Provenance check skipped (gh unavailable and bootstrap failed)" -f (Format-Step 4)) -ForegroundColor DarkGray
 }
 
+# Install-receipt: a per-package TOML at
+# `~/.simplemotion/install-receipt/<package>.toml` recording the channel,
+# tag, source-repo, asset SHA, and timestamp of this install. Consumed
+# by the binary's own `update` subcommand so subsequent refreshes target
+# the channel the user actually installed from. Best-effort: failure to
+# create the receipt is reported but does not abort the install.
+function Write-InstallReceipt {
+    param(
+        [string]$Pkg,
+        [string]$Channel,
+        [string]$Tag,
+        [string]$SourceRepo,
+        [string]$Sha
+    )
+    $dir = Join-Path $HOME '.simplemotion\install-receipt'
+    try {
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    } catch {
+        Write-Host "  [!] could not create $dir — receipt skipped" -ForegroundColor DarkGray
+        return
+    }
+    $file = Join-Path $dir "$Pkg.toml"
+    $ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $body = @"
+schema       = 1
+package      = "$Pkg"
+channel      = "$Channel"
+tag          = "$Tag"
+source_repo  = "$SourceRepo"
+asset_sha256 = "$Sha"
+installed_at = "$ts"
+installer    = "sm-install.ps1"
+"@
+    try {
+        Set-Content -Path $file -Value $body -Encoding UTF8
+    } catch {
+        Write-Host "  [!] could not write $file — receipt skipped" -ForegroundColor DarkGray
+    }
+}
+
 function Install-Binary {
     if (-not (Test-Path $InstallDir)) {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
     $dest = Join-Path $InstallDir "$Package.exe"
     Move-Item -Path $tmpBin -Destination $dest -Force
+    Write-InstallReceipt -Pkg $Package -Channel $Channel -Tag $Version -SourceRepo $SourceRepo -Sha $actual
     Write-Host ("  [v] {0} Installed {1} to {2}" -f (Format-Step 5), $Package, $dest) -ForegroundColor Green
 
     $pathDirs = $env:PATH -split ';'
