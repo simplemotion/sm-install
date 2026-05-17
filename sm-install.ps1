@@ -148,6 +148,7 @@ if ($expected -ne $actual) {
     exit 1
 }
 Write-Host ("  [v] {0} Checksum verified" -f (Format-Step 3)) -ForegroundColor Green
+Write-Host ("      [-] SHA256: {0}" -f $actual) -ForegroundColor DarkGray
 
 # Ensure a usable `gh` is on disk before attempting attestation. Mirrors
 # the Bash side's `ensure_gh`: returns the path to a usable gh, or $null
@@ -334,6 +335,12 @@ function Install-Binary {
     $pathDirs = $env:PATH -split ';'
     if ($pathDirs -notcontains $InstallDir) {
         Write-Host "  [!] $InstallDir is not on `$env:PATH — add it to your profile to run $Package directly" -ForegroundColor DarkGray
+    }
+    # Quiet-mode tail-note — matches the Bash side, surfaces that
+    # subprocess output is suppressed BEFORE the binary's first phase
+    # header lands.
+    if ($env:SM_WELCOME_QUIET) {
+        Write-Host "      [-] Quiet mode: auto-accepting Y/n prompts, subprocess output suppressed (replayed on failure)." -ForegroundColor DarkGray
     }
     return $dest
 }
