@@ -236,8 +236,7 @@ if [[ "$expected" != "$actual" ]]; then
     printf '  [%s✗%s] SHA256 mismatch for %s: expected %s, got %s\n' "$RED" "$RESET" "$ASSET" "$expected" "$actual" >&2
     exit 1
 fi
-printf '  [%s✓%s] %s Checksum verified\n' "$GREEN" "$RESET" "$(fmt_step 3)"
-printf '      [%s-%s] SHA256: %s\n' "$DIM" "$RESET" "$actual"
+printf '  [%s✓%s] %s Checksum verified %s(SHA256: %s)%s\n' "$GREEN" "$RESET" "$(fmt_step 3)" "$DIM" "$actual" "$RESET"
 
 # Ensure a usable `gh` is on disk before attempting attestation. Runs
 # unconditionally so the bootstrap pays the one-time ~10s cost now
@@ -381,15 +380,6 @@ install_to_dir() {
         *":$INSTALL_DIR:"*) ;;
         *) printf '  [%s!%s] %s is not on $PATH — add it to your shell init to run %s directly\n' "$DIM" "$RESET" "$INSTALL_DIR" "$PACKAGE" ;;
     esac
-    # Quiet-mode tail-note: surface that subsequent subprocess output
-    # will be suppressed BEFORE the binary's first phase header lands,
-    # so the user isn't surprised by silent steps. Lives here (in the
-    # Download phase) rather than in the binary because the binary's
-    # equivalent prompt::info would otherwise sit between the Download
-    # and Setup phase headers, visually unbound.
-    if [[ -n "${SM_WELCOME_QUIET:-}" ]]; then
-        printf '      [%s-%s] Quiet mode: auto-accepting Y/n prompts, subprocess output suppressed (replayed on failure).\n' "$DIM" "$RESET"
-    fi
 }
 
 exec_binary() {

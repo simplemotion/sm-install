@@ -30,15 +30,6 @@ $env:SM_WELCOME_STEPS_OFFSET = '5'
 # Update if the binary's step count changes.
 $env:SM_WELCOME_STEPS_TOTAL  = '20'
 
-# Pre-parse --quiet so sm-install.ps1 can show the quiet-mode notice
-# inside its Download-phase output. Forward the flag to the binary as
-# well so its own subprocess-suppression kicks in. Boundary-walk the
-# arg array because PowerShell doesn't expose Bash-style positional
-# parameters here.
-if ($args -contains '--quiet' -or $args -contains '-q') {
-    $env:SM_WELCOME_QUIET = '1'
-}
-
 # Fast path: skip the sm-install.ps1 download if the persistent binary
 # is already on disk at the latest tag for the selected channel.
 $channel  = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' }
