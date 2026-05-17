@@ -34,9 +34,12 @@ export SM_WELCOME_STEPS_OFFSET=5
 # Update if the binary's step count changes.
 export SM_WELCOME_STEPS_TOTAL=20
 
-# Pre-parse our own flags: --channel goes to sm-install.sh; everything
-# else forwards to the sm-welcome binary. SM_CHANNEL env var also
-# still works (sm-install.sh respects it as a default).
+# Pre-parse our own flags: --channel goes to sm-install.sh; --quiet /
+# -q is captured so sm-install.sh can show the quiet-mode notice inside
+# its Download-phase output (still forwarded to the binary so it knows
+# to suppress its own subprocesses); everything else forwards to the
+# binary verbatim. SM_CHANNEL env var also still works (sm-install.sh
+# respects it as a default).
 CHANNEL_ARG=()
 CHANNEL_VAL="${SM_CHANNEL:-release}"
 BIN_ARGS=()
@@ -48,6 +51,12 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             CHANNEL_ARG=(--channel "$2"); CHANNEL_VAL="$2"; shift 2
+            ;;
+        -q|--quiet)
+            # Signal sm-install.sh; binary still sees the flag (forwarded
+            # below) and toggles its own quiet behaviour.
+            export SM_WELCOME_QUIET=1
+            BIN_ARGS+=("$1"); shift
             ;;
         *)
             BIN_ARGS+=("$1"); shift
