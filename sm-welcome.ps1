@@ -25,10 +25,10 @@ Write-Host ""
 # steps via env vars the binary reads.
 $env:SM_WELCOME_NO_BANNER    = '1'
 $env:SM_WELCOME_STEPS_OFFSET = '5'
-# Binary has 14 internal steps (00-preflight through 14-reload-shell);
-# bootstrap contributes 5 silent steps. 5 + 14 = 19.
+# Binary has 15 internal steps (00-preflight through 14-reload-shell);
+# bootstrap contributes 5 silent steps. 5 + 15 = 20.
 # Update if the binary's step count changes.
-$env:SM_WELCOME_STEPS_TOTAL  = '19'
+$env:SM_WELCOME_STEPS_TOTAL  = '20'
 
 # Fast path: skip the install.ps1 download if the persistent binary
 # is already on disk at the latest tag for the selected channel.
