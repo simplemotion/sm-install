@@ -253,7 +253,7 @@ ensure_gh() {
     # so we don't fork a second canonical gh path across the bootstrap.
     local gh_dir="$HOME/.local/bin"
     local local_gh="${gh_dir}/gh"
-    printf '  [%s*%s] Bootstrapping gh (kept at %s/gh for future runs)...\n' "$DIM" "$RESET" "$gh_dir"
+    printf '      [%s*%s] Bootstrapping gh (kept at %s/gh for future runs)...\n' "$DIM" "$RESET" "$gh_dir"
     local gh_tag gh_ver gh_os gh_arch gh_ext gh_asset gh_url gh_sums_url gh_tmp gh_sums_tmp gh_expected gh_actual
     # Try the live cli/cli releases API first; fall back to a known-good
     # pinned version if it fails (anonymous API rate-limit is 60/hr/IP and
@@ -263,19 +263,19 @@ ensure_gh() {
     gh_tag=$(curl -fsSL "https://api.github.com/repos/cli/cli/releases/latest" 2>/dev/null \
         | awk -F'"' '/"tag_name":/ {print $4; exit}') || gh_tag=""
     if [[ -z "$gh_tag" ]]; then
-        printf '  [%s-%s] cli/cli release lookup failed (rate-limited?); using pinned %s\n' "$DIM" "$RESET" "$GH_PIN"
+        printf '      [%s-%s] cli/cli release lookup failed (rate-limited?); using pinned %s\n' "$DIM" "$RESET" "$GH_PIN"
         gh_tag="$GH_PIN"
     fi
     gh_ver="${gh_tag#v}"
     case "$OS" in
         apple-darwin)      gh_os="macOS"; gh_ext="zip"    ;;
         unknown-linux-gnu) gh_os="linux"; gh_ext="tar.gz" ;;
-        *) printf '  [%s-%s] gh bootstrap skipped (unsupported OS)\n' "$DIM" "$RESET"; return 1 ;;
+        *) printf '      [%s-%s] gh bootstrap skipped (unsupported OS)\n' "$DIM" "$RESET"; return 1 ;;
     esac
     case "$ARCH" in
         aarch64) gh_arch="arm64" ;;
         x86_64)  gh_arch="amd64" ;;
-        *) printf '  [%s-%s] gh bootstrap skipped (unsupported arch)\n' "$DIM" "$RESET"; return 1 ;;
+        *) printf '      [%s-%s] gh bootstrap skipped (unsupported arch)\n' "$DIM" "$RESET"; return 1 ;;
     esac
     gh_asset="gh_${gh_ver}_${gh_os}_${gh_arch}.${gh_ext}"
     gh_url="https://github.com/cli/cli/releases/download/${gh_tag}/${gh_asset}"
@@ -284,7 +284,7 @@ ensure_gh() {
     if ! curl -fsSL "$gh_url" -o "$gh_tmp" 2>/dev/null \
        || ! curl -fsSL "$gh_sums_url" -o "$gh_sums_tmp" 2>/dev/null; then
         rm -f "$gh_tmp" "$gh_sums_tmp"
-        printf '  [%s-%s] gh bootstrap skipped (download failed)\n' "$DIM" "$RESET"; return 1
+        printf '      [%s-%s] gh bootstrap skipped (download failed)\n' "$DIM" "$RESET"; return 1
     fi
     gh_expected=$(awk -v a="$gh_asset" '$2 == a {print $1; exit}' "$gh_sums_tmp")
     if command -v sha256sum >/dev/null 2>&1; then
@@ -294,7 +294,7 @@ ensure_gh() {
     fi
     if [[ -z "$gh_expected" || "$gh_expected" != "$gh_actual" ]]; then
         rm -f "$gh_tmp" "$gh_sums_tmp"
-        printf '  [%s-%s] gh bootstrap skipped (SHA256 mismatch on cli/cli asset)\n' "$DIM" "$RESET"; return 1
+        printf '      [%s-%s] gh bootstrap skipped (SHA256 mismatch on cli/cli asset)\n' "$DIM" "$RESET"; return 1
     fi
     mkdir -p "$gh_dir"
     case "$gh_ext" in
@@ -305,10 +305,10 @@ ensure_gh() {
     rm -f "$gh_tmp" "$gh_sums_tmp"
     if [[ -x "$local_gh" ]]; then
         GH_BIN="$local_gh"
-        printf '  [%s✓%s] Installed gh %s to %s\n' "$GREEN" "$RESET" "$gh_ver" "$local_gh"
+        printf '      [%s✓%s] Installed gh %s to %s\n' "$GREEN" "$RESET" "$gh_ver" "$local_gh"
         return 0
     fi
-    printf '  [%s-%s] gh bootstrap skipped (extraction failed)\n' "$DIM" "$RESET"; return 1
+    printf '      [%s-%s] gh bootstrap skipped (extraction failed)\n' "$DIM" "$RESET"; return 1
 }
 
 # Attestation check, two paths in order of preference:

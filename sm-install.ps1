@@ -163,7 +163,7 @@ function Ensure-Gh {
     # gh path across the bootstrap.
     $ghDir = Join-Path $HOME '.local\bin'
     $localGh = Join-Path $ghDir 'gh.exe'
-    Write-Host ("  [*] Bootstrapping gh (kept at {0} for future runs)..." -f $localGh) -ForegroundColor DarkGray
+    Write-Host ("      [*] Bootstrapping gh (kept at {0} for future runs)..." -f $localGh) -ForegroundColor DarkGray
 
     # Try the live cli/cli releases API; fall back to a known-good pinned
     # version on rate-limit (anon API is 60/hr/IP). Bump the fallback
@@ -175,7 +175,7 @@ function Ensure-Gh {
         $ghTag = $rel.tag_name
     } catch { $ghTag = $null }
     if (-not $ghTag) {
-        Write-Host ("  [-] cli/cli release lookup failed (rate-limited?); using pinned {0}" -f $ghPin) -ForegroundColor DarkGray
+        Write-Host ("      [-] cli/cli release lookup failed (rate-limited?); using pinned {0}" -f $ghPin) -ForegroundColor DarkGray
         $ghTag = $ghPin
     }
     $ghVer = $ghTag.TrimStart('v')
@@ -192,7 +192,7 @@ function Ensure-Gh {
         Invoke-WebRequest -Uri $ghSumsUrl -OutFile $tmpSums -UseBasicParsing -ErrorAction Stop
     } catch {
         Remove-Item $tmpZip, $tmpSums -ErrorAction SilentlyContinue
-        Write-Host "  [-] gh bootstrap skipped (download failed)" -ForegroundColor DarkGray
+        Write-Host "      [-] gh bootstrap skipped (download failed)" -ForegroundColor DarkGray
         return $null
     }
 
@@ -206,7 +206,7 @@ function Ensure-Gh {
     $actual = (Get-FileHash -Path $tmpZip -Algorithm SHA256).Hash.ToLower()
     if (-not $expected -or $expected.ToLower() -ne $actual) {
         Remove-Item $tmpZip -ErrorAction SilentlyContinue
-        Write-Host "  [-] gh bootstrap skipped (SHA256 mismatch on cli/cli asset)" -ForegroundColor DarkGray
+        Write-Host "      [-] gh bootstrap skipped (SHA256 mismatch on cli/cli asset)" -ForegroundColor DarkGray
         return $null
     }
 
@@ -216,12 +216,12 @@ function Ensure-Gh {
         Expand-Archive -Path $tmpZip -DestinationPath $extractDir -Force
         $inner = Get-ChildItem -Path $extractDir -Recurse -Filter 'gh.exe' | Select-Object -First 1
         if (-not $inner) {
-            Write-Host "  [-] gh bootstrap skipped (gh.exe not in archive)" -ForegroundColor DarkGray
+            Write-Host "      [-] gh bootstrap skipped (gh.exe not in archive)" -ForegroundColor DarkGray
             return $null
         }
         Copy-Item -Path $inner.FullName -Destination $localGh -Force
     } catch {
-        Write-Host "  [-] gh bootstrap skipped (extraction failed)" -ForegroundColor DarkGray
+        Write-Host "      [-] gh bootstrap skipped (extraction failed)" -ForegroundColor DarkGray
         return $null
     } finally {
         Remove-Item $tmpZip -ErrorAction SilentlyContinue
@@ -229,10 +229,10 @@ function Ensure-Gh {
     }
 
     if (Test-Path $localGh) {
-        Write-Host ("  [v] Installed gh {0} to {1}" -f $ghVer, $localGh) -ForegroundColor Green
+        Write-Host ("      [v] Installed gh {0} to {1}" -f $ghVer, $localGh) -ForegroundColor Green
         return $localGh
     }
-    Write-Host "  [-] gh bootstrap skipped (extraction failed)" -ForegroundColor DarkGray
+    Write-Host "      [-] gh bootstrap skipped (extraction failed)" -ForegroundColor DarkGray
     return $null
 }
 
