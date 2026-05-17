@@ -1,8 +1,10 @@
 # SimpleMotion generic binary installer base (Windows).
 #
 # Resolves a SimpleMotion-published binary from a GitHub Releases-hosting
-# repo, verifies SHA256 (and attestation if `gh` is authed), and either
-# installs it to PATH or execs it from a temp file.
+# repo, verifies SHA256 + sigstore build-provenance attestation, and
+# either installs it to PATH or execs it from a temp file. Bootstraps
+# `gh` into `~/.local/bin/gh.exe` if missing so attestation verification
+# works on fresh machines (matches the Bash side's `ensure_gh` flow).
 #
 # Usage (typically called by a thin per-product wrapper):
 #   irm "https://install.simplemotion.com/sm-install.ps1" |
@@ -46,6 +48,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Surface SimpleMotion bins + the gh bootstrap dir so `Get-Command` finds
+# our own tools on the *first* run, before any profile-script PATH edit
+# has taken effect in a new PowerShell session.
+$env:PATH = (Join-Path $HOME '.simplemotion\bin') + ';' + (Join-Path $HOME '.local\bin') + ';' + $env:PATH
 
 if (-not $Channel) { $Channel = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' } }
 # Channel → repo defaulting. Each channel maps to its own GitHub repo.
@@ -142,22 +149,137 @@ if ($expected -ne $actual) {
 }
 Write-Host ("  [v] {0} Checksum verified" -f (Format-Step 3)) -ForegroundColor Green
 
-# Optional provenance check.
-$ghAvailable = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
-$ghAuthed = $false
-if ($ghAvailable) {
-    & gh auth status 2>$null | Out-Null
-    $ghAuthed = ($LASTEXITCODE -eq 0)
+# Ensure a usable `gh` is on disk before attempting attestation. Mirrors
+# the Bash side's `ensure_gh`: returns the path to a usable gh, or $null
+# if bootstrapping failed (in which case the attestation check is skipped
+# — SHA256 still anchors integrity). Runs unconditionally so the one-time
+# ~10s cost lands now instead of on the next release that ships a bundle.
+function Ensure-Gh {
+    $cmd = Get-Command gh -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+
+    # Match the Rust sm-welcome step's location (installer.rs:60) and the
+    # Bash installer (~/.local/bin/gh) so we don't fork a second canonical
+    # gh path across the bootstrap.
+    $ghDir = Join-Path $HOME '.local\bin'
+    $localGh = Join-Path $ghDir 'gh.exe'
+    Write-Host ("  [*] Bootstrapping gh (kept at {0} for future runs)..." -f $localGh) -ForegroundColor DarkGray
+
+    # Try the live cli/cli releases API; fall back to a known-good pinned
+    # version on rate-limit (anon API is 60/hr/IP). Bump the fallback
+    # periodically — keep in lock-step with the Bash side's GH_PIN.
+    $ghPin = 'v2.89.0'
+    $ghTag = $null
+    try {
+        $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/cli/cli/releases/latest' -UseBasicParsing -ErrorAction Stop
+        $ghTag = $rel.tag_name
+    } catch { $ghTag = $null }
+    if (-not $ghTag) {
+        Write-Host ("  [-] cli/cli release lookup failed (rate-limited?); using pinned {0}" -f $ghPin) -ForegroundColor DarkGray
+        $ghTag = $ghPin
+    }
+    $ghVer = $ghTag.TrimStart('v')
+
+    $ghArch = if ($arch -eq 'aarch64') { 'arm64' } else { 'amd64' }
+    $ghAsset = "gh_${ghVer}_windows_${ghArch}.zip"
+    $ghUrl       = "https://github.com/cli/cli/releases/download/${ghTag}/${ghAsset}"
+    $ghSumsUrl   = "https://github.com/cli/cli/releases/download/${ghTag}/gh_${ghVer}_checksums.txt"
+
+    $tmpZip  = Join-Path $env:TEMP ("gh-bootstrap-{0}.zip" -f ([Guid]::NewGuid().ToString('N')))
+    $tmpSums = "$tmpZip.sums"
+    try {
+        Invoke-WebRequest -Uri $ghUrl     -OutFile $tmpZip  -UseBasicParsing -ErrorAction Stop
+        Invoke-WebRequest -Uri $ghSumsUrl -OutFile $tmpSums -UseBasicParsing -ErrorAction Stop
+    } catch {
+        Remove-Item $tmpZip, $tmpSums -ErrorAction SilentlyContinue
+        Write-Host "  [-] gh bootstrap skipped (download failed)" -ForegroundColor DarkGray
+        return $null
+    }
+
+    # cli/cli's checksums.txt is `<sha>  <asset>` per line.
+    $expected = $null
+    foreach ($line in Get-Content $tmpSums) {
+        $parts = $line -split '\s+'
+        if ($parts.Count -ge 2 -and $parts[1] -eq $ghAsset) { $expected = $parts[0]; break }
+    }
+    Remove-Item $tmpSums -ErrorAction SilentlyContinue
+    $actual = (Get-FileHash -Path $tmpZip -Algorithm SHA256).Hash.ToLower()
+    if (-not $expected -or $expected.ToLower() -ne $actual) {
+        Remove-Item $tmpZip -ErrorAction SilentlyContinue
+        Write-Host "  [-] gh bootstrap skipped (SHA256 mismatch on cli/cli asset)" -ForegroundColor DarkGray
+        return $null
+    }
+
+    if (-not (Test-Path $ghDir)) { New-Item -ItemType Directory -Path $ghDir -Force | Out-Null }
+    $extractDir = Join-Path $env:TEMP ("gh-extract-{0}" -f ([Guid]::NewGuid().ToString('N')))
+    try {
+        Expand-Archive -Path $tmpZip -DestinationPath $extractDir -Force
+        $inner = Get-ChildItem -Path $extractDir -Recurse -Filter 'gh.exe' | Select-Object -First 1
+        if (-not $inner) {
+            Write-Host "  [-] gh bootstrap skipped (gh.exe not in archive)" -ForegroundColor DarkGray
+            return $null
+        }
+        Copy-Item -Path $inner.FullName -Destination $localGh -Force
+    } catch {
+        Write-Host "  [-] gh bootstrap skipped (extraction failed)" -ForegroundColor DarkGray
+        return $null
+    } finally {
+        Remove-Item $tmpZip -ErrorAction SilentlyContinue
+        Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    if (Test-Path $localGh) {
+        Write-Host ("  [v] Installed gh {0} to {1}" -f $ghVer, $localGh) -ForegroundColor Green
+        return $localGh
+    }
+    Write-Host "  [-] gh bootstrap skipped (extraction failed)" -ForegroundColor DarkGray
+    return $null
 }
-if ($ghAuthed) {
-    & gh attestation verify $tmpBin --repo $SourceRepo 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host ("  [v] {0} Provenance verified (against {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
+
+# Attestation check, two paths in order of preference:
+#   1. Offline bundle (`<asset>.sigstore.jsonl`) — no API, no auth.
+#   2. API lookup against the source repo — needs authed gh with read
+#      access (SimpleMotion staff only).
+# Verification failure on path 1 is fatal; missing bundle plus unauthed /
+# unreadable source repo is a skip (SHA256 still anchors integrity).
+$ghBin = Ensure-Gh
+if ($ghBin) {
+    $bundleUrl = "$url.sigstore.jsonl"
+    $tmpAtt = [System.IO.Path]::Combine($env:TEMP, "$Package-$([Guid]::NewGuid().ToString('N')).sigstore.jsonl")
+    $bundleOk = $false
+    try {
+        Invoke-WebRequest -Uri $bundleUrl -OutFile $tmpAtt -UseBasicParsing -ErrorAction Stop
+        $bundleOk = $true
+    } catch { $bundleOk = $false }
+
+    if ($bundleOk) {
+        & $ghBin attestation verify $tmpBin --bundle $tmpAtt --repo $SourceRepo *> $null
+        $code = $LASTEXITCODE
+        Remove-Item $tmpAtt -ErrorAction SilentlyContinue
+        if ($code -eq 0) {
+            Write-Host ("  [v] {0} Provenance verified (offline bundle, signed by {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
+        } else {
+            Write-Host ("  [x] {0} Provenance bundle present but failed verification (signed by {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Red
+            Remove-Item $tmpBin -ErrorAction SilentlyContinue
+            exit 1
+        }
     } else {
-        Write-Host ("  [-] {0} Provenance check skipped (source repo not accessible to this gh account)" -f (Format-Step 4)) -ForegroundColor DarkGray
+        Remove-Item $tmpAtt -ErrorAction SilentlyContinue
+        & $ghBin auth status *> $null
+        $authed = ($LASTEXITCODE -eq 0)
+        if ($authed) {
+            & $ghBin attestation verify $tmpBin --repo $SourceRepo *> $null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host ("  [v] {0} Provenance verified (API lookup against {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
+            } else {
+                Write-Host ("  [-] {0} Provenance check skipped (no bundle on release; source repo unauthed or not readable)" -f (Format-Step 4)) -ForegroundColor DarkGray
+            }
+        } else {
+            Write-Host ("  [-] {0} Provenance check skipped (no bundle on release; source repo unauthed or not readable)" -f (Format-Step 4)) -ForegroundColor DarkGray
+        }
     }
 } else {
-    Write-Host ("  [-] {0} Provenance check skipped (install & authenticate gh to enable)" -f (Format-Step 4)) -ForegroundColor DarkGray
+    Write-Host ("  [-] {0} Provenance check skipped (gh unavailable and bootstrap failed)" -f (Format-Step 4)) -ForegroundColor DarkGray
 }
 
 function Install-Binary {
