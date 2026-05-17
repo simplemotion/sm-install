@@ -18,7 +18,9 @@ This repo contains **no binaries**. It is the routing layer between consumers an
 | `simplemotion/private` | private | Internal-stable binaries |
 | `simplemotion/testing` | private | In-flight test builds |
 
-`install.sh` and `install.ps1` map `--channel <name>` to `simplemotion/<name>` and fetch the appropriate `releases/latest`. The channel-repo split avoids the prerelease-flag + latest-flag conflict that the prior `sm-get` single-repo design hit on 2026-05-16.
+`sm-install.sh` and `sm-install.ps1` map `--channel <name>` to `simplemotion/<name>` and fetch the appropriate `releases/latest`. The channel-repo split avoids the prerelease-flag + latest-flag conflict that the prior `sm-get` single-repo design hit on 2026-05-16.
+
+All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enterprise naming rule (see `9000-0000-SM-Govern/DISTRIBUTE.md`).
 
 ## What this repo is NOT
 

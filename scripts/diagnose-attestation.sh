@@ -7,9 +7,9 @@
 #   Test 1 — relative paths with the original asset name (Greg's manual
 #            invocation that succeeded).
 #   Test 2 — absolute tempfile paths (`mktemp` defaults: no asset name)
-#            which mirrors install.sh's invocation that fails.
+#            which mirrors sm-install.sh's invocation that fails.
 #   Test 3 — absolute paths with the asset name in a tempdir (combines
-#            install.sh's tempdir hygiene with proper file naming).
+#            sm-install.sh's tempdir hygiene with proper file naming).
 #
 # Outputs are NOT redirected so we see gh's real error if any test fails.
 #
@@ -22,7 +22,7 @@
 
 set -uo pipefail
 
-# Mirror install.sh's PATH prepend so we find any gh that install.sh
+# Mirror sm-install.sh's PATH prepend so we find any gh that sm-install.sh
 # bootstrapped into ~/.local/bin or ~/.simplemotion/bin, even if those
 # dirs aren't on the user's interactive shell PATH yet.
 export PATH="$HOME/.simplemotion/bin:$HOME/.local/bin:$PATH"
@@ -79,8 +79,8 @@ T1_EXIT=$?
 cd /
 rm -rf "$T1_DIR"
 
-# --- Test 2: anonymous tempfile paths (install.sh's pattern) ----------------
-banner "Test 2 — anonymous tempfile paths (install.sh's pattern)"
+# --- Test 2: anonymous tempfile paths (sm-install.sh's pattern) ----------------
+banner "Test 2 — anonymous tempfile paths (sm-install.sh's pattern)"
 T2_BIN=$(mktemp)
 T2_ATT=$(mktemp)
 curl -fsSL "$URL" -o "$T2_BIN" || { echo "binary download failed"; exit 2; }
@@ -111,13 +111,13 @@ result "Test 3 (absolute tempdir + named)    " "$T3_EXIT"
 printf '\n'
 if [[ "$T1_EXIT" -eq 0 && "$T2_EXIT" -ne 0 && "$T3_EXIT" -eq 0 ]]; then
     printf '%sDiagnosis:%s gh attestation verify needs the asset name in the file path.\n' "$YELLOW" "$RESET"
-    printf '            install.sh fix: download to "${TMPDIR}/${ASSET}" instead of plain mktemp.\n'
+    printf '            sm-install.sh fix: download to "${TMPDIR}/${ASSET}" instead of plain mktemp.\n'
 elif [[ "$T1_EXIT" -eq 0 && "$T2_EXIT" -eq 0 && "$T3_EXIT" -eq 0 ]]; then
-    printf '%sDiagnosis:%s all three pass standalone. install.sh failure is elsewhere\n' "$YELLOW" "$RESET"
-    printf '            (env var, set -e interaction, redirect side-effect). Need to instrument install.sh.\n'
+    printf '%sDiagnosis:%s all three pass standalone. sm-install.sh failure is elsewhere\n' "$YELLOW" "$RESET"
+    printf '            (env var, set -e interaction, redirect side-effect). Need to instrument sm-install.sh.\n'
 elif [[ "$T1_EXIT" -ne 0 && "$T2_EXIT" -ne 0 && "$T3_EXIT" -ne 0 ]]; then
     printf '%sDiagnosis:%s every variant fails — environmental issue (network, TUF cache, gh state)\n' "$YELLOW" "$RESET"
-    printf '            unrelated to install.sh. Look at the gh error text in each test.\n'
+    printf '            unrelated to sm-install.sh. Look at the gh error text in each test.\n'
 else
     printf '%sDiagnosis:%s unexpected pattern. Send the full output back for review.\n' "$YELLOW" "$RESET"
 fi

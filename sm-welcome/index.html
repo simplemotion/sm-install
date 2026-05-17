@@ -129,7 +129,7 @@
   // options from the positional args we want forwarded to the script.
   // The inner `curl | bash` race that used to produce the (56)
   // 'Failure writing output' message is fixed inside sm-welcome.sh
-  // itself (it now buffers install.sh before exec), so the outer
+  // itself (it now buffers sm-install.sh before exec), so the outer
   // pipe form is shell-paste-clean.
   //
   // Returns { head, tail } so the rendered command can break between

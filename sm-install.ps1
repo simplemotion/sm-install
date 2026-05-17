@@ -5,8 +5,8 @@
 # installs it to PATH or execs it from a temp file.
 #
 # Usage (typically called by a thin per-product wrapper):
-#   irm "https://install.simplemotion.com/install.ps1" |
-#     iex "& { $input | Out-Null }; install.ps1 -Repo ... -Package ..."
+#   irm "https://install.simplemotion.com/sm-install.ps1" |
+#     iex "& { $input | Out-Null }; sm-install.ps1 -Repo ... -Package ..."
 #
 # More commonly invoked indirectly via a per-product wrapper that pipes
 # this script's contents to iex and supplies the args.
@@ -71,6 +71,13 @@ $arch = if ([System.Environment]::Is64BitOperatingSystem) {
 $target = "$arch-pc-windows-msvc"
 $asset  = "$Package-$target.exe"
 
+# Step numbering — matches sm-welcome's `[NN/TOTAL]` counter so the
+# Download phase and the binary's onboarding steps read as one
+# continuous numbered sequence (01..TOTAL). Defaults to 20 (= 5
+# download-phase steps + 15 onboarding steps).
+$StepsTotal = if ($env:SM_WELCOME_STEPS_TOTAL) { $env:SM_WELCOME_STEPS_TOTAL } else { '20' }
+function Format-Step([int]$i) { return ('[{0:D2}/{1}]' -f $i, $StepsTotal) }
+
 # Resolve tag. With channel-per-repo, each repo has its own
 # releases/latest and we never use the prerelease flag:
 #   - Single-package channel repos: hit /releases/latest directly.
@@ -102,14 +109,14 @@ $tmpBin = [System.IO.Path]::Combine($env:TEMP, "$Package-$([Guid]::NewGuid().ToS
 $tmpSum = "$tmpBin.sha256"
 
 # Phase header — matches sm-welcome's `phase_header` formatting so the
-# bootstrap output frames as one continuous workflow. Rule width is
-# 36 - len("Bootstrap") = 27 dashes (same formula as the Rust side).
+# download output frames as one continuous workflow. Rule width is
+# 36 - len("Download") = 28 dashes (same formula as the Rust side).
 Write-Host ""
-Write-Host "  ── Bootstrap ───────────────────────────"
-Write-Host "  [+] Platform: $target (channel=$Channel, tag=$Version)"
+Write-Host "  ── Download ────────────────────────────"
+Write-Host ("  [+] {0} Platform: {1} (channel={2}, tag={3})" -f (Format-Step 1), $target, $Channel, $Version)
 
 # Download binary.
-Write-Host "  [*] Downloading $Package..."
+Write-Host ("  [*] {0} Downloading {1}..." -f (Format-Step 2), $Package)
 try {
     Invoke-WebRequest -Uri $url -OutFile $tmpBin -UseBasicParsing
 } catch {
@@ -117,7 +124,7 @@ try {
     exit 1
 }
 
-# Download + verify SHA256.
+# Download + verify checksum.
 try {
     Invoke-WebRequest -Uri "$url.sha256" -OutFile $tmpSum -UseBasicParsing
 } catch {
@@ -130,12 +137,12 @@ $actual   = (Get-FileHash -Path $tmpBin -Algorithm SHA256).Hash.ToLower()
 Remove-Item $tmpSum -ErrorAction SilentlyContinue
 if ($expected -ne $actual) {
     Remove-Item $tmpBin -ErrorAction SilentlyContinue
-    Write-Host "  [x] SHA256 mismatch for ${asset}: expected $expected, got $actual" -ForegroundColor Red
+    Write-Host "  [x] Checksum mismatch for ${asset}: expected $expected, got $actual" -ForegroundColor Red
     exit 1
 }
-Write-Host "  [v] SHA256 verified" -ForegroundColor Green
+Write-Host ("  [v] {0} Checksum verified" -f (Format-Step 3)) -ForegroundColor Green
 
-# Optional attestation check.
+# Optional provenance check.
 $ghAvailable = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
 $ghAuthed = $false
 if ($ghAvailable) {
@@ -145,12 +152,12 @@ if ($ghAvailable) {
 if ($ghAuthed) {
     & gh attestation verify $tmpBin --repo $SourceRepo 2>$null | Out-Null
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "  [v] Attestation verified (against $SourceRepo)" -ForegroundColor Green
+        Write-Host ("  [v] {0} Provenance verified (against {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
     } else {
-        Write-Host "  [-] Attestation check skipped (source repo not accessible to this gh account)" -ForegroundColor DarkGray
+        Write-Host ("  [-] {0} Provenance check skipped (source repo not accessible to this gh account)" -f (Format-Step 4)) -ForegroundColor DarkGray
     }
 } else {
-    Write-Host "  [-] Attestation check skipped (install & authenticate gh to enable)" -ForegroundColor DarkGray
+    Write-Host ("  [-] {0} Provenance check skipped (install & authenticate gh to enable)" -f (Format-Step 4)) -ForegroundColor DarkGray
 }
 
 function Install-Binary {
@@ -159,7 +166,7 @@ function Install-Binary {
     }
     $dest = Join-Path $InstallDir "$Package.exe"
     Move-Item -Path $tmpBin -Destination $dest -Force
-    Write-Host "  [v] Installed $Package to $dest" -ForegroundColor Green
+    Write-Host ("  [v] {0} Installed {1} to {2}" -f (Format-Step 5), $Package, $dest) -ForegroundColor Green
 
     $pathDirs = $env:PATH -split ';'
     if ($pathDirs -notcontains $InstallDir) {

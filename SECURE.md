@@ -6,7 +6,7 @@
 
 This is the **public** installer-script home for SimpleMotion binary distribution, served at `install.simplemotion.com` (GitHub Pages on `main`). It hosts:
 
-- `install.sh` / `install.ps1` — generic installer base (resolves channel → repo, downloads, verifies, installs).
+- `sm-install.sh` / `sm-install.ps1` — generic installer base (resolves channel → repo, downloads, verifies, installs).
 - `sm-welcome.sh` / `sm-welcome.ps1` — onboarding-CLI wrapper.
 - `sm-simplicity.sh` / `sm-simplicity.ps1` — Simplicity-product wrapper.
 - `sm-welcome/index.html` — landing page.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SimpleMotion onboarding bootstrap (macOS + Linux).
-# Thin wrapper around install.sh — fetches sm-welcome and execs it.
+# Thin wrapper around sm-install.sh — fetches sm-welcome and execs it.
 #
 # Usage (command substitution buffers the script before bash starts, so
 # the trailing `exec` never closes a still-active curl pipe — the (56)
@@ -19,7 +19,7 @@
 #   - mismatch → invoke `sm-welcome update`, then exec the refreshed
 #                local binary (recursion is broken by
 #                SM_WELCOME_SKIP_FAST_PATH=1 set on the update child)
-#   - missing  → fall through to the install.sh download flow
+#   - missing  → fall through to the sm-install.sh download flow
 
 set -euo pipefail
 
@@ -34,9 +34,9 @@ export SM_WELCOME_STEPS_OFFSET=5
 # Update if the binary's step count changes.
 export SM_WELCOME_STEPS_TOTAL=20
 
-# Pre-parse our own flags: --channel goes to install.sh; everything
+# Pre-parse our own flags: --channel goes to sm-install.sh; everything
 # else forwards to the sm-welcome binary. SM_CHANNEL env var also
-# still works (install.sh respects it as a default).
+# still works (sm-install.sh respects it as a default).
 CHANNEL_ARG=()
 CHANNEL_VAL="${SM_CHANNEL:-release}"
 BIN_ARGS=()
@@ -55,7 +55,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Fast path: skip the install.sh download if ~/.simplemotion/bin/sm-welcome
+# Fast path: skip the sm-install.sh download if ~/.simplemotion/bin/sm-welcome
 # is already on disk at the latest tag for the selected channel.
 INSTALL_DIR="${SM_INSTALL_DIR:-$HOME/.simplemotion/bin}"
 LOCAL_BIN="${INSTALL_DIR}/sm-welcome"
@@ -100,11 +100,11 @@ if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -x "$LOCAL_BIN" ]]; then
     fi
 fi
 
-# Buffer install.sh into a variable (curl finishes BEFORE bash starts),
+# Buffer sm-install.sh into a variable (curl finishes BEFORE bash starts),
 # then exec bash -c on the captured script. No FIFO, no race with the
-# trailing exec inside install.sh — no curl (56) warning.
-INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/install.sh")
-exec bash -c "$INSTALL_SH" install \
+# trailing exec inside sm-install.sh — no curl (56) warning.
+INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")
+exec bash -c "$INSTALL_SH" sm-install \
     --package sm-welcome \
     --source-repo 3400-0000-SM-Software/3400-0009-SM-Welcome \
     --mode install-and-run \

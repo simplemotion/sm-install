@@ -6,7 +6,7 @@
 # installs it to a PATH directory or execs it from a temp file.
 #
 # Usage (typically called by a thin per-product wrapper):
-#   install.sh --package NAME [options] [-- ARGS...]
+#   sm-install.sh --package NAME [options] [-- ARGS...]
 #
 # Required flags:
 #   --package NAME               Binary name + asset prefix. The release
@@ -92,13 +92,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$PACKAGE" ]]; then
-    echo "install.sh: --package is required (try --help)" >&2
+    echo "sm-install.sh: --package is required (try --help)" >&2
     exit 1
 fi
 # --repo is optional: defaults from --channel below.
 case "$MODE" in
     install|run|install-and-run) ;;
-    *) echo "install.sh: --mode must be 'install', 'run', or 'install-and-run' (got: $MODE)" >&2; exit 1 ;;
+    *) echo "sm-install.sh: --mode must be 'install', 'run', or 'install-and-run' (got: $MODE)" >&2; exit 1 ;;
 esac
 
 # Channel → repo defaulting. Four channels each get their own repo, so
@@ -106,7 +106,7 @@ esac
 # flag dance. `--repo` overrides for development / external use.
 case "$CHANNEL" in
     release|preview|private|testing) ;;
-    *) echo "install.sh: unknown --channel: $CHANNEL (use release|preview|private|testing)" >&2; exit 1 ;;
+    *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|private|testing)" >&2; exit 1 ;;
 esac
 if [[ -z "$REPO" ]]; then
     REPO="simplemotion/${CHANNEL}"
@@ -130,7 +130,7 @@ OS_KERNEL=$(uname)
 case "$OS_KERNEL" in
     Darwin) OS="apple-darwin" ;;
     Linux)  OS="unknown-linux-gnu" ;;
-    *) echo "Unsupported OS: $OS_KERNEL (only macOS and Linux; use install.ps1 on Windows)" >&2; exit 1 ;;
+    *) echo "Unsupported OS: $OS_KERNEL (only macOS and Linux; use sm-install.ps1 on Windows)" >&2; exit 1 ;;
 esac
 ARCH=$(uname -m)
 case "$ARCH" in
@@ -186,25 +186,37 @@ TMPATT_RAW=$(mktemp)
 TMPATT="${TMPATT_RAW}.sigstore.jsonl"
 trap 'rm -f "$TMPBIN" "$TMPSUM" "$TMPATT" "$TMPATT_RAW"' EXIT
 
+# Step numbering — matches sm-welcome's `[NN/TOTAL]` counter so the
+# Download phase and the binary's onboarding steps read as one
+# continuous numbered sequence (01..TOTAL). Defaults to 20 (= 5
+# download-phase steps + 15 onboarding steps); the wrapper script
+# (sm-welcome.sh) exports SM_WELCOME_STEPS_TOTAL to keep these in lock-step.
+STEPS_TOTAL="${SM_WELCOME_STEPS_TOTAL:-20}"
+fmt_step() {
+    # $1 = 1-based step index, $2 = width-zero-padded
+    printf '[%02d/%s]' "$1" "$STEPS_TOTAL"
+}
+
 # Phase header — matches sm-welcome's `phase_header` formatting so the
-# bootstrap output frames as one continuous workflow. Rule width is
-# 36 - len("Bootstrap") = 27 dashes (same formula as the Rust side).
-printf '\n  %s──%s %sBootstrap%s %s───────────────────────────%s\n' \
+# download output frames as one continuous workflow. Rule width is
+# 36 - len("Download") = 28 dashes (same formula as the Rust side).
+printf '\n  %s──%s %sDownload%s %s────────────────────────────%s\n' \
     "$DIM" "$RESET" "$BOLD" "$RESET" "$DIM" "$RESET"
 
-printf '  [%s✓%s] Platform: %s (channel=%s, tag=%s)\n' "$GREEN" "$RESET" "$TARGET" "$CHANNEL" "$TAG"
+printf '  [%s✓%s] %s Platform: %s (channel=%s, tag=%s)\n' \
+    "$GREEN" "$RESET" "$(fmt_step 1)" "$TARGET" "$CHANNEL" "$TAG"
 
 # Download binary.
 if [[ -t 1 ]]; then
-    printf '  [*] Downloading %s...' "$PACKAGE"
+    printf '  [*] %s Downloading %s...' "$(fmt_step 2)" "$PACKAGE"
 else
-    printf '  [*] Downloading %s...\n' "$PACKAGE"
+    printf '  [*] %s Downloading %s...\n' "$(fmt_step 2)" "$PACKAGE"
 fi
 if ! curl -fsSL "$URL" -o "$TMPBIN"; then
     printf '%s  [%s✗%s] Failed to download %s\n' "$ERASE" "$RED" "$RESET" "$URL" >&2
     exit 1
 fi
-printf '%s  [%s✓%s] Downloaded %s\n' "$ERASE" "$GREEN" "$RESET" "$ASSET"
+printf '%s  [%s✓%s] %s Downloaded %s\n' "$ERASE" "$GREEN" "$RESET" "$(fmt_step 2)" "$ASSET"
 
 # Download + verify SHA256.
 if ! curl -fsSL "${URL}.sha256" -o "$TMPSUM"; then
@@ -224,7 +236,7 @@ if [[ "$expected" != "$actual" ]]; then
     printf '  [%s✗%s] SHA256 mismatch for %s: expected %s, got %s\n' "$RED" "$RESET" "$ASSET" "$expected" "$actual" >&2
     exit 1
 fi
-printf '  [%s✓%s] SHA256 verified\n' "$GREEN" "$RESET"
+printf '  [%s✓%s] %s Checksum verified\n' "$GREEN" "$RESET" "$(fmt_step 3)"
 
 # Ensure a usable `gh` is on disk before attempting attestation. Runs
 # unconditionally so the bootstrap pays the one-time ~10s cost now
@@ -309,19 +321,19 @@ ensure_gh
 if [[ -n "$GH_BIN" ]]; then
     if curl -fsSL "${URL}.sigstore.jsonl" -o "$TMPATT" 2>/dev/null; then
         if "$GH_BIN" attestation verify "$TMPBIN" --bundle "$TMPATT" --repo "$SOURCE_REPO" >/dev/null 2>&1; then
-            printf '  [%s✓%s] Attestation verified (offline bundle, signed by %s)\n' "$GREEN" "$RESET" "$SOURCE_REPO"
+            printf '  [%s✓%s] %s Provenance verified (offline bundle, signed by %s)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO"
         else
-            printf '  [%s✗%s] Attestation bundle present but failed verification (signed by %s)\n' "$RED" "$RESET" "$SOURCE_REPO" >&2
+            printf '  [%s✗%s] %s Provenance bundle present but failed verification (signed by %s)\n' "$RED" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO" >&2
             exit 1
         fi
     elif "$GH_BIN" auth status >/dev/null 2>&1 \
          && "$GH_BIN" attestation verify "$TMPBIN" --repo "$SOURCE_REPO" >/dev/null 2>&1; then
-        printf '  [%s✓%s] Attestation verified (API lookup against %s)\n' "$GREEN" "$RESET" "$SOURCE_REPO"
+        printf '  [%s✓%s] %s Provenance verified (API lookup against %s)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO"
     else
-        printf '  [%s-%s] Attestation check skipped (no bundle on release; source repo unauthed or not readable)\n' "$DIM" "$RESET"
+        printf '  [%s-%s] %s Provenance check skipped (no bundle on release; source repo unauthed or not readable)\n' "$DIM" "$RESET" "$(fmt_step 4)"
     fi
 else
-    printf '  [%s-%s] Attestation check skipped (gh unavailable and bootstrap failed)\n' "$DIM" "$RESET"
+    printf '  [%s-%s] %s Provenance check skipped (gh unavailable and bootstrap failed)\n' "$DIM" "$RESET" "$(fmt_step 4)"
 fi
 
 chmod +x "$TMPBIN"
@@ -329,7 +341,7 @@ chmod +x "$TMPBIN"
 install_to_dir() {
     mkdir -p "$INSTALL_DIR"
     install -m 0755 "$TMPBIN" "${INSTALL_DIR}/${PACKAGE}"
-    printf '  [%s✓%s] Installed %s to %s/%s\n' "$GREEN" "$RESET" "$PACKAGE" "$INSTALL_DIR" "$PACKAGE"
+    printf '  [%s✓%s] %s Installed %s to %s/%s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$PACKAGE" "$INSTALL_DIR" "$PACKAGE"
     case ":$PATH:" in
         *":$INSTALL_DIR:"*) ;;
         *) printf '  [%s!%s] %s is not on $PATH — add it to your shell init to run %s directly\n' "$DIM" "$RESET" "$INSTALL_DIR" "$PACKAGE" ;;

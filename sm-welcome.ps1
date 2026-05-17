@@ -1,5 +1,5 @@
 # SimpleMotion onboarding bootstrap (Windows).
-# Thin wrapper around install.ps1 — fetches sm-welcome and execs it.
+# Thin wrapper around sm-install.ps1 — fetches sm-welcome and execs it.
 #
 # Usage:
 #   irm https://install.simplemotion.com/sm-welcome.ps1 | iex
@@ -12,7 +12,7 @@
 #   - mismatch → invoke `sm-welcome update`, then the refreshed local
 #                binary (recursion broken by
 #                $env:SM_WELCOME_SKIP_FAST_PATH=1 on the update child)
-#   - missing  → fall through to the install.ps1 download flow
+#   - missing  → fall through to the sm-install.ps1 download flow
 
 $ErrorActionPreference = 'Stop'
 
@@ -30,7 +30,7 @@ $env:SM_WELCOME_STEPS_OFFSET = '5'
 # Update if the binary's step count changes.
 $env:SM_WELCOME_STEPS_TOTAL  = '20'
 
-# Fast path: skip the install.ps1 download if the persistent binary
+# Fast path: skip the sm-install.ps1 download if the persistent binary
 # is already on disk at the latest tag for the selected channel.
 $channel  = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' }
 $installDir = if ($env:SM_INSTALL_DIR) { $env:SM_INSTALL_DIR } else { Join-Path $HOME '.simplemotion\bin' }
@@ -94,7 +94,7 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
     }
 }
 
-$installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/install.ps1')
+$installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1')
 $sb = [ScriptBlock]::Create($installer)
 & $sb -Package 'sm-welcome' `
       -SourceRepo '3400-0000-SM-Software/3400-0009-SM-Welcome' `
