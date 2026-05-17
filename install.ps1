@@ -103,9 +103,9 @@ $tmpSum = "$tmpBin.sha256"
 
 # Phase header — matches sm-welcome's `phase_header` formatting so the
 # bootstrap output frames as one continuous workflow. Rule width is
-# 36 - len("Download") = 28 dashes (same formula as the Rust side).
+# 36 - len("Bootstrap") = 27 dashes (same formula as the Rust side).
 Write-Host ""
-Write-Host "  ── Download ────────────────────────────"
+Write-Host "  ── Bootstrap ───────────────────────────"
 Write-Host "  [+] Platform: $target (channel=$Channel, tag=$Version)"
 
 # Download binary.

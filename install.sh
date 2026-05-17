@@ -188,8 +188,8 @@ trap 'rm -f "$TMPBIN" "$TMPSUM" "$TMPATT" "$TMPATT_RAW"' EXIT
 
 # Phase header — matches sm-welcome's `phase_header` formatting so the
 # bootstrap output frames as one continuous workflow. Rule width is
-# 36 - len("Download") = 28 dashes (same formula as the Rust side).
-printf '\n  %s──%s %sDownload%s %s────────────────────────────%s\n' \
+# 36 - len("Bootstrap") = 27 dashes (same formula as the Rust side).
+printf '\n  %s──%s %sBootstrap%s %s───────────────────────────%s\n' \
     "$DIM" "$RESET" "$BOLD" "$RESET" "$DIM" "$RESET"
 
 printf '  [%s✓%s] Platform: %s (channel=%s, tag=%s)\n' "$GREEN" "$RESET" "$TARGET" "$CHANNEL" "$TAG"
