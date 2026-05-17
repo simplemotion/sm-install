@@ -71,25 +71,15 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
             & $localBin
             exit $LASTEXITCODE
         } else {
-            Write-Host ("  [^] sm-welcome {0} installed; {1} available — running `sm-welcome update`" -f $localVer, $latestVer) -ForegroundColor DarkGray
-            # SM_WELCOME_SKIP_FAST_PATH=1 disarms this same fast path
-            # when `sm-welcome update` re-enters sm-welcome.ps1 via irm,
-            # so the update child performs a real download instead of
-            # looping.
-            $prev = $env:SM_WELCOME_SKIP_FAST_PATH
-            try {
-                $env:SM_WELCOME_SKIP_FAST_PATH = '1'
-                & $localBin update
-                $updated = ($LASTEXITCODE -eq 0)
-            } finally {
-                $env:SM_WELCOME_SKIP_FAST_PATH = $prev
-            }
-            if ($updated) {
-                & $localBin
-                exit $LASTEXITCODE
-            } else {
-                Write-Host "  [!] sm-welcome update failed — falling back to full install" -ForegroundColor Yellow
-            }
+            # Mismatch: fall through to the full install below. The local
+            # binary's `sm-welcome update` historically defaulted to the
+            # `release` channel regardless of the user's chosen one, so
+            # calling it here led to cross-channel downgrades and step-name
+            # mismatches on the rebooted binary. The full-install path
+            # below is already channel-aware, so a plain fall-through is
+            # simpler and correct. Install-receipt-driven channel pinning
+            # is the follow-up that lets `sm-welcome update` stand alone.
+            Write-Host ("  [^] sm-welcome {0} installed; {1} available on channel={2} — re-installing" -f $localVer, $latestVer, $channel) -ForegroundColor DarkGray
         }
     }
 }

@@ -87,15 +87,16 @@ if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -x "$LOCAL_BIN" ]]; then
             printf '  [✓] sm-welcome %s already installed (channel=%s) — skipping download\n' "$LOCAL_VER" "$CHANNEL_VAL"
             exec_local
         else
-            printf '  [↑] sm-welcome %s installed; %s available — running `sm-welcome update`\n' "$LOCAL_VER" "$LATEST_VER"
-            # SM_WELCOME_SKIP_FAST_PATH=1 disarms this same fast path when
-            # `sm-welcome update` re-enters sm-welcome.sh via curl, so the
-            # update child performs a real download instead of looping.
-            if SM_WELCOME_SKIP_FAST_PATH=1 "$LOCAL_BIN" update; then
-                exec_local
-            else
-                printf '  [!] `sm-welcome update` failed — falling back to full install\n' >&2
-            fi
+            # Mismatch: fall through to the full install below. The local
+            # binary's `sm-welcome update` historically defaulted to the
+            # `release` channel regardless of the user's `--channel` ask,
+            # so calling it here led to cross-channel downgrades (and a
+            # cross-version step-name mismatch on the rebooted binary).
+            # The full-install path below is already channel-aware via
+            # CHANNEL_ARG, so a plain fall-through is both simpler and
+            # correct. Install-receipt-driven channel pinning is the
+            # follow-up that lets `sm-welcome update` stand on its own.
+            printf '  [↑] sm-welcome %s installed; %s available on channel=%s — re-installing\n' "$LOCAL_VER" "$LATEST_VER" "$CHANNEL_VAL"
         fi
     fi
 fi
