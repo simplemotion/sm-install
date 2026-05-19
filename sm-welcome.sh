@@ -29,10 +29,11 @@ printf '\n  SimpleMotion — Development Environment Onboarding\n  ════�
 # steps via env vars the binary reads (banner suppression + offset).
 export SM_WELCOME_NO_BANNER=1
 export SM_WELCOME_STEPS_OFFSET=5
-# Binary has 15 internal steps (00-preflight through 14-reload-shell);
-# bootstrap contributes 5 silent steps. 5 + 15 = 20.
-# Update if the binary's step count changes.
-export SM_WELCOME_STEPS_TOTAL=20
+# Binary has 14 internal steps on Unix (Linux + macOS share the same
+# step set; the Windows-only 06-shell slot is in STEPS_WIN only).
+# Bootstrap contributes 5 silent steps. 5 + 14 = 19.
+# Update if the binary's Unix step count changes.
+export SM_WELCOME_STEPS_TOTAL=19
 
 # Pre-parse our own flags: --channel goes to sm-install.sh; everything
 # else forwards to the sm-welcome binary. SM_CHANNEL env var also
@@ -107,6 +108,7 @@ fi
 INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")
 exec bash -c "$INSTALL_SH" sm-install \
     --package sm-welcome \
+    --asset-suffix short \
     --source-repo 3400-0000-SM-Software/3400-0009-SM-Welcome \
     --mode install-and-run \
     ${CHANNEL_ARG[@]+"${CHANNEL_ARG[@]}"} \

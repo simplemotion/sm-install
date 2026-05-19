@@ -33,6 +33,13 @@
 #                                ~/.simplemotion/bin.
 #   -Version TAG                 Pin a specific tag.
 #   -Channel release|preview     Default: $env:SM_CHANNEL or 'release'.
+#   -AssetSuffix triple|short    Asset-name suffix style:
+#                                  triple = `<package>-<arch>-<os>.exe`
+#                                           (default; e.g.
+#                                           `sm-x-aarch64-pc-windows-msvc.exe`)
+#                                  short  = `<package>-win-<arch>.exe`
+#                                           with arm64/x64 short codes
+#                                           (e.g. `sm-x-win-arm64.exe`).
 #   -BinArgs ARGS                Forwarded to the binary in run mode.
 
 param(
@@ -44,6 +51,7 @@ param(
     [string]$InstallDir = '',
     [string]$Version = '',
     [ValidateSet('release','preview','private','testing')] [string]$Channel = '',
+    [ValidateSet('triple','short')] [string]$AssetSuffix = 'triple',
     [string[]]$BinArgs = @()
 )
 
@@ -68,15 +76,17 @@ if (-not $InstallDir) {
     }
 }
 
-# Host triple.
+# Host triple + short OS/arch codes (used by -AssetSuffix=short).
 $arch = if ([System.Environment]::Is64BitOperatingSystem) {
     if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'aarch64' } else { 'x86_64' }
 } else {
     Write-Host "  [x] 32-bit Windows is not supported." -ForegroundColor Red
     exit 1
 }
+$archShort = if ($arch -eq 'aarch64') { 'arm64' } else { 'x64' }
 $target = "$arch-pc-windows-msvc"
-$asset  = "$Package-$target.exe"
+$suffix = if ($AssetSuffix -eq 'short') { "win-$archShort" } else { $target }
+$asset  = "$Package-$suffix.exe"
 
 # Step numbering — matches sm-welcome's `[NN/TOTAL]` counter so the
 # Download phase and the binary's onboarding steps read as one

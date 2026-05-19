@@ -34,6 +34,16 @@
 #                                `sm-simplicity-v`). Default: no filter
 #                                (single-package channel — use
 #                                `releases/latest` directly).
+#   --asset-suffix triple|short  Asset-name suffix style:
+#                                  triple = `<package>-<arch>-<os>` (default;
+#                                           e.g. `sm-x-aarch64-apple-darwin`)
+#                                  short  = `<package>-<os>-<arch>` with the
+#                                           short OS/arch codes — `mac`/`lin`
+#                                           and `arm64`/`x64` (e.g.
+#                                           `sm-x-mac-arm64`).
+#                                Each style needs the publisher to ship
+#                                matching asset names; ARM64 + x86_64 are
+#                                expected for all three OSes under `short`.
 #   --mode install|run|install-and-run
 #                                install         = drop in install dir, exit.
 #                                run             = exec from temp file
@@ -70,6 +80,7 @@ MODE="install"
 INSTALL_DIR=""
 VERSION=""
 CHANNEL="${SM_CHANNEL:-release}"
+ASSET_SUFFIX="triple"
 BIN_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -82,6 +93,7 @@ while [[ $# -gt 0 ]]; do
         --install-dir)  INSTALL_DIR="$2"; shift 2 ;;
         --version)      VERSION="$2"; shift 2 ;;
         --channel)      CHANNEL="$2"; shift 2 ;;
+        --asset-suffix) ASSET_SUFFIX="$2"; shift 2 ;;
         --)             shift; BIN_ARGS=("$@"); break ;;
         -h|--help)
             sed -n '2,/^set -euo pipefail$/p' "$0" | sed -n 's/^# \{0,1\}//p' >&2
@@ -125,21 +137,26 @@ if [[ -z "$INSTALL_DIR" ]]; then
     fi
 fi
 
-# Host triple.
+# Host triple + short OS/arch codes (used by --asset-suffix=short).
 OS_KERNEL=$(uname)
 case "$OS_KERNEL" in
-    Darwin) OS="apple-darwin" ;;
-    Linux)  OS="unknown-linux-gnu" ;;
+    Darwin) OS="apple-darwin";      OS_SHORT="mac" ;;
+    Linux)  OS="unknown-linux-gnu"; OS_SHORT="lin" ;;
     *) echo "Unsupported OS: $OS_KERNEL (only macOS and Linux; use sm-install.ps1 on Windows)" >&2; exit 1 ;;
 esac
 ARCH=$(uname -m)
 case "$ARCH" in
-    arm64|aarch64) ARCH="aarch64" ;;
-    x86_64|amd64)  ARCH="x86_64" ;;
+    arm64|aarch64) ARCH="aarch64"; ARCH_SHORT="arm64" ;;
+    x86_64|amd64)  ARCH="x86_64";  ARCH_SHORT="x64" ;;
     *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
 esac
 TARGET="${ARCH}-${OS}"
-ASSET="${PACKAGE}-${TARGET}"
+case "$ASSET_SUFFIX" in
+    triple) SUFFIX="${TARGET}" ;;
+    short)  SUFFIX="${OS_SHORT}-${ARCH_SHORT}" ;;
+    *) echo "sm-install.sh: --asset-suffix must be 'triple' or 'short' (got: $ASSET_SUFFIX)" >&2; exit 1 ;;
+esac
+ASSET="${PACKAGE}-${SUFFIX}"
 
 # Resolve tag. With channel-per-repo, each repo has its own
 # `releases/latest` and we never use the prerelease flag, so:
@@ -253,7 +270,6 @@ ensure_gh() {
     # so we don't fork a second canonical gh path across the bootstrap.
     local gh_dir="$HOME/.local/bin"
     local local_gh="${gh_dir}/gh"
-    printf '      [%s*%s] Bootstrapping gh (kept at %s/gh for future runs)...\n' "$DIM" "$RESET" "$gh_dir"
     local gh_tag gh_ver gh_os gh_arch gh_ext gh_asset gh_url gh_sums_url gh_tmp gh_sums_tmp gh_expected gh_actual
     # Try the live cli/cli releases API first; fall back to a known-good
     # pinned version if it fails (anonymous API rate-limit is 60/hr/IP and
@@ -305,7 +321,6 @@ ensure_gh() {
     rm -f "$gh_tmp" "$gh_sums_tmp"
     if [[ -x "$local_gh" ]]; then
         GH_BIN="$local_gh"
-        printf '      [%s✓%s] Installed gh %s to %s\n' "$GREEN" "$RESET" "$gh_ver" "$local_gh"
         return 0
     fi
     printf '      [%s-%s] gh bootstrap skipped (extraction failed)\n' "$DIM" "$RESET"; return 1

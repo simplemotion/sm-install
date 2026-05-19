@@ -87,6 +87,7 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
 $installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1')
 $sb = [ScriptBlock]::Create($installer)
 & $sb -Package 'sm-welcome' `
+      -AssetSuffix 'short' `
       -SourceRepo '3400-0000-SM-Software/3400-0009-SM-Welcome' `
       -Channel $channel `
       -Mode 'install-and-run'
