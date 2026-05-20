@@ -38,23 +38,12 @@ Write-Host ""
 Write-Host "  SimpleMotion — Development Environment Onboarding"
 Write-Host "  ══════════════════════════════════════════════════"
 
-# Per-section gate. Prints a framed one-line section header, then blocks
-# on Read-Host until the user confirms. Default = Yes (Enter accepts).
-# Any other response aborts the entire bootstrap.
-function Confirm-Section($title) {
-    Write-Host ""
-    Write-Host ("  ── {0} {1}" -f $title, ('─' * [Math]::Max(0, 56 - $title.Length)))
-    if ($env:SM_WELCOME_ASSUME_YES) {
-        Write-Host "  [+] Proceeding (SM_WELCOME_ASSUME_YES set)" -ForegroundColor DarkGray
-        return
-    }
-    $resp = Read-Host "  Proceed? [Y/n]"
-    $resp = if ($resp) { $resp.Trim().ToLower() } else { '' }
-    if ($resp -notin @('', 'y', 'yes')) {
-        Write-Host "  [!] Aborted by user." -ForegroundColor Yellow
-        exit 1
-    }
-}
+# Source the shared install-toolchain library. Brings in Confirm-Section,
+# Get-LatestRelease, Confirm-AssetDigest, Remove-TreeForcefully,
+# Find-Cosign, Install-Cosign, Initialize-CosignTuf. sm-install.ps1 loads
+# the same lib when it runs in Section 2.
+$smInstallLib = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install-lib.ps1')
+Invoke-Expression $smInstallLib
 
 # Canonical install root for all three tools. Single PATH entry suffices
 # for cosign (top-level .exe); pwsh and git live in subdirs and get their
@@ -74,19 +63,18 @@ $LocalGitDir = Join-Path $LocalBinDir 'git'
 # Exported so sm-install.ps1 (Section 2) picks up the same value.
 $env:TUF_ROOT = Join-Path $HOME '.simplemotion\sigstore'
 
-# Host arch — used by every Install-* helper. cosign doesn't ship a
-# Windows-arm64 build (only `cosign-windows-amd64.exe`), so we always
-# pull the amd64 binary on Windows; Windows-on-ARM emulates x64 fine
-# for a one-shot verify call. pwsh and Git both have native arm64.
+# Host arch — used by Install-PwshPortable and Install-GitPortable.
+# (cosign always uses the amd64 binary on Windows; that's handled in
+# Install-Cosign inside sm-install-lib.ps1, since cosign doesn't ship
+# a Windows-arm64 build and Windows-on-ARM emulates x64 fine.)
 $archSuffix = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
-$archSuffixCosign = 'amd64'
 
 # ── Discovery helpers ──────────────────────────────────────────────
-# Deliberately check ~/.local/bin ONLY — system-wide pwsh / git / cosign
-# installs are ignored. The SimpleMotion onboarding wants a controlled,
-# per-user toolchain so version drift across machines stays bounded;
-# Section 1 always provisions to ~/.local/bin even when the tools are
-# already present in Program Files or on PATH.
+# pwsh / git are sm-welcome-specific (sm-install doesn't need them).
+# Find-Cosign is provided by sm-install-lib.ps1. All three deliberately
+# check ~/.local/bin ONLY — system-wide installs are ignored. Section 1
+# always provisions to ~/.local/bin so the toolchain stays per-user and
+# version drift across machines stays bounded.
 function Find-Pwsh7 {
     $p = Join-Path $LocalPwshDir 'pwsh.exe'
     if (Test-Path $p) { return $p }
@@ -97,49 +85,13 @@ function Find-Git {
     if (Test-Path $p) { return $p }
     return $null
 }
-function Find-Cosign {
-    $p = Join-Path $LocalBinDir 'cosign.exe'
-    if (Test-Path $p) { return $p }
-    return $null
-}
 
 # ── Install helpers ────────────────────────────────────────────────
-# Each Install-* fetches the project's /releases/latest metadata via the
-# GitHub API to get tag + asset list + SHA256 digest in one call, then
-# downloads the matching asset, SHA256-verifies, and unpacks to its
-# install location. Returns the path to the installed binary on success
-# or $null on failure (caller decides whether the missing tool is fatal).
-function Get-LatestRelease($repo) {
-    try {
-        return Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing
-    } catch {
-        Write-Host ("  [!] release lookup failed for {0}: {1}" -f $repo, $_.Exception.Message) -ForegroundColor Yellow
-        return $null
-    }
-}
-# PortableGit's 7z extract sets read-only attributes on parts of the tree
-# (and antivirus / OneDrive can briefly hold file handles), which makes a
-# plain `Remove-Item -Recurse -Force` fail with "You do not have sufficient
-# access rights". cmd's rmdir /s /q ignores attributes and retries through
-# transient locks, so we shell out to it for the trickiest cleanups.
-function Remove-TreeForcefully($path) {
-    if (-not (Test-Path $path)) { return }
-    cmd /c "rmdir /s /q `"$path`"" 2>$null
-    if (Test-Path $path) {
-        # Fallback for tree paths that confuse cmd's rmdir (e.g. long paths
-        # without the `\\?\` prefix). Clear read-only first, then retry.
-        Get-ChildItem $path -Recurse -Force -ErrorAction SilentlyContinue |
-            ForEach-Object { try { $_.Attributes = 'Normal' } catch {} }
-        Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
-    }
-}
-function Confirm-AssetDigest($file, $asset) {
-    $expected = ($asset.digest -replace '^sha256:', '').ToLower()
-    if (-not $expected) { return $false }
-    $actual = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLower()
-    return ($expected -eq $actual)
-}
-
+# Install-PwshPortable and Install-GitPortable are sm-welcome-specific
+# (other SimpleMotion installers don't bootstrap a developer shell
+# environment). Each fetches the project's /releases/latest metadata,
+# SHA256-verifies against the API-published digest via Confirm-AssetDigest
+# (from sm-install-lib.ps1), and unpacks into ~/.local/bin/<tool>.
 function Install-PwshPortable {
     $rel = Get-LatestRelease 'PowerShell/PowerShell'
     if (-not $rel) { return $null }
@@ -197,51 +149,7 @@ function Install-GitPortable {
     if (Test-Path $exe) { return $exe }
     return $null
 }
-function Install-Cosign {
-    $rel = Get-LatestRelease 'sigstore/cosign'
-    if (-not $rel) { return $null }
-    $assetName = "cosign-windows-$archSuffixCosign.exe"
-    $asset = $rel.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
-    if (-not $asset) { Write-Host "  [!] cosign asset $assetName not in release" -ForegroundColor Yellow; return $null }
-    $tmp = Join-Path $env:TEMP ("cosign-{0}.exe" -f ([Guid]::NewGuid().ToString('N')))
-    try {
-        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tmp -UseBasicParsing -ErrorAction Stop
-        if (-not (Confirm-AssetDigest $tmp $asset)) {
-            Remove-Item $tmp -ErrorAction SilentlyContinue
-            Write-Host "  [!] cosign SHA256 mismatch" -ForegroundColor Yellow; return $null
-        }
-        if (-not (Test-Path $LocalBinDir)) { New-Item -ItemType Directory -Path $LocalBinDir -Force | Out-Null }
-        Move-Item -Path $tmp -Destination (Join-Path $LocalBinDir 'cosign.exe') -Force
-    } catch {
-        Remove-Item $tmp -ErrorAction SilentlyContinue
-        Write-Host ("  [!] cosign install failed: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
-        return $null
-    }
-    $exe = Join-Path $LocalBinDir 'cosign.exe'
-    if (Test-Path $exe) { return $exe }
-    return $null
-}
-
-# Point cosign at GitHub's Sigstore TUF repo so it can verify GitHub-issued
-# attestations natively. Cosign walks the TUF chain from the bootstrap
-# 1.root.json, fetches the current trusted_root.json (containing GitHub's
-# Fulcio CA + TSA pubkeys), and caches everything under $env:TUF_ROOT.
-# Idempotent: re-running just refreshes the cache.
-function Initialize-CosignTuf($cosignExe) {
-    if (-not $cosignExe) { return $false }
-    if (-not (Test-Path $env:TUF_ROOT)) { New-Item -ItemType Directory -Path $env:TUF_ROOT -Force | Out-Null }
-    $tmpRoot = Join-Path $env:TEMP ("gh-1.root-{0}.json" -f ([Guid]::NewGuid().ToString('N')))
-    try {
-        Invoke-WebRequest -Uri 'https://tuf-repo.github.com/1.root.json' -OutFile $tmpRoot -UseBasicParsing -ErrorAction Stop
-        & $cosignExe initialize --mirror 'https://tuf-repo.github.com' --root $tmpRoot *> $null
-        return ($LASTEXITCODE -eq 0)
-    } catch {
-        Write-Host ("  [!] cosign TUF init failed: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
-        return $false
-    } finally {
-        Remove-Item $tmpRoot -ErrorAction SilentlyContinue
-    }
-}
+# (Install-Cosign and Initialize-CosignTuf come from sm-install-lib.ps1.)
 
 # sm-welcome's step-counter UI accounts for the bootstrap's pre-binary
 # steps via env vars the binary reads.
