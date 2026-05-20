@@ -12,6 +12,12 @@
 #
 # Channel selection via SM_CHANNEL (release | preview); default release.
 #
+# Clean re-install: --clean (or SM_WELCOME_CLEAN=1) deletes ~/.local/bin/
+# {cosign,pwsh-7,git}, ~/.simplemotion, and ~/.sm-welcome.toml before
+# Section 1 so the bootstrap rebuilds from scratch. ~/.local at large is
+# left alone on Unix because it's the XDG user-install root and likely
+# contains unrelated packages (pip --user, cargo bin, etc.).
+#
 # Three interactive sections, each gated by a Y/n prompt and prefaced by
 # a splash explaining the section in detail:
 #   1. Prerequisites — verify git, curl, bash are present; auto-install
@@ -84,6 +90,8 @@ export SM_WELCOME_STEPS_TOTAL=19
 CHANNEL_ARG=()
 CHANNEL_VAL="${SM_CHANNEL:-release}"
 BIN_ARGS=()
+CLEAN=0
+if [[ -n "${SM_WELCOME_CLEAN:-}" ]]; then CLEAN=1; fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --channel)
@@ -93,6 +101,9 @@ while [[ $# -gt 0 ]]; do
             fi
             CHANNEL_ARG=(--channel "$2"); CHANNEL_VAL="$2"; shift 2
             ;;
+        --clean)
+            CLEAN=1; shift
+            ;;
         *)
             BIN_ARGS+=("$1"); shift
             ;;
@@ -101,6 +112,26 @@ done
 
 INSTALL_DIR="${SM_INSTALL_DIR:-$HOME/.simplemotion/bin}"
 LOCAL_BIN="${INSTALL_DIR}/sm-welcome"
+
+# Optional clean wipe. --clean (or SM_WELCOME_CLEAN=1) deletes the
+# SimpleMotion-owned bootstrap locations on disk so Section 1 rebuilds
+# from scratch. We scope to specific paths under ~/.local (rather than
+# ~/.local wholesale) because that dir is the XDG user-install root on
+# Unix and likely contains unrelated packages (pip --user, cargo, etc.).
+if [[ $CLEAN -eq 1 ]]; then
+    printf '\n  [!] --clean set — wiping prior bootstrap state\n'
+    for p in \
+        "$HOME/.local/bin/cosign" \
+        "$HOME/.local/bin/pwsh-7" \
+        "$HOME/.local/bin/git" \
+        "$HOME/.simplemotion" \
+        "$HOME/.sm-welcome.toml"; do
+        if [[ -e "$p" ]]; then
+            rm -rf "$p"
+            printf '      removed %s\n' "$p"
+        fi
+    done
+fi
 
 # Bootstrap a working cosign into ~/.local/bin/cosign without Homebrew or
 # sudo. Fetches the binary + checksums via GitHub's /releases/latest/

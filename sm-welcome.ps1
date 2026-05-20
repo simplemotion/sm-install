@@ -5,6 +5,13 @@
 #   irm https://install.simplemotion.com/sm-welcome.ps1 | iex
 #   $env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 | iex
 #
+# Clean re-install:
+#   $env:SM_WELCOME_CLEAN=1; irm https://install.simplemotion.com/sm-welcome.ps1 | iex
+# Wipes ~/.local, ~/.simplemotion, and ~/.sm-welcome.toml before Section 1,
+# so the toolchain, sm-welcome install, sigstore TUF cache, and the
+# binary's step-tracker are all rebuilt from scratch. `irm | iex` doesn't
+# forward positional args, so the flag is plumbed as an env var.
+#
 # Three interactive sections, each gated by a Y/n prompt and prefaced by
 # a splash explaining the section in detail:
 #   1. Prerequisites — install PowerShell 7, Git, and cosign into
@@ -248,6 +255,26 @@ $env:SM_WELCOME_STEPS_TOTAL  = '20'
 $channel    = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' }
 $installDir = if ($env:SM_INSTALL_DIR) { $env:SM_INSTALL_DIR } else { Join-Path $HOME '.simplemotion\bin' }
 $localBin   = Join-Path $installDir 'sm-welcome.exe'
+
+# Optional clean wipe. SM_WELCOME_CLEAN=1 deletes the three SimpleMotion-
+# owned bootstrap locations on disk so Section 1 rebuilds from scratch:
+# the local toolchain (~/.local), the install + receipts + TUF cache
+# (~/.simplemotion), and the binary's step-tracker (~/.sm-welcome.toml).
+if ($env:SM_WELCOME_CLEAN) {
+    Write-Host ""
+    Write-Host "  [!] SM_WELCOME_CLEAN set — wiping prior bootstrap state" -ForegroundColor Yellow
+    foreach ($d in @((Join-Path $HOME '.local'), (Join-Path $HOME '.simplemotion'))) {
+        if (Test-Path $d) {
+            Remove-TreeForcefully $d
+            Write-Host ("      removed {0}" -f $d) -ForegroundColor DarkGray
+        }
+    }
+    $stateFile = Join-Path $HOME '.sm-welcome.toml'
+    if (Test-Path $stateFile) {
+        Remove-Item $stateFile -Force -ErrorAction SilentlyContinue
+        Write-Host ("      removed {0}" -f $stateFile) -ForegroundColor DarkGray
+    }
+}
 
 # ── Section 1: Prerequisites ──────────────────────────────────────────
 $pwshPath   = Find-Pwsh7
