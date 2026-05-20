@@ -69,12 +69,18 @@ function Confirm-Section($title, $lines) {
     }
 }
 
-# Canonical install root for all four tools. Single PATH entry suffices
-# for gh and cosign (top-level .exe); pwsh and git live in subdirs and
-# get their own PATH entries appended in the same session below.
-$LocalBin = Join-Path $HOME '.local\bin'
-$LocalPwshDir = Join-Path $LocalBin 'pwsh-7'
-$LocalGitDir = Join-Path $LocalBin 'git'
+# Canonical install root for all three tools. Single PATH entry suffices
+# for cosign (top-level .exe); pwsh and git live in subdirs and get their
+# own PATH entries appended in the same session below.
+#
+# *** Variable name is deliberately `$LocalBinDir`, not `$LocalBin`. ***
+# PowerShell variable names are case-insensitive, so `$LocalBin` would
+# collide with the existing `$localBin` (= path to sm-welcome.exe under
+# $installDir) defined later in this script. That collision once caused
+# cosign to be written to `<installDir>\sm-welcome.exe\cosign.exe`.
+$LocalBinDir = Join-Path $HOME '.local\bin'
+$LocalPwshDir = Join-Path $LocalBinDir 'pwsh-7'
+$LocalGitDir = Join-Path $LocalBinDir 'git'
 
 # Per-SimpleMotion TUF root for cosign so we don't clobber any existing
 # public-good Sigstore trust the user may have under ~/.sigstore.
@@ -105,7 +111,7 @@ function Find-Git {
     return $null
 }
 function Find-Cosign {
-    $p = Join-Path $LocalBin 'cosign.exe'
+    $p = Join-Path $LocalBinDir 'cosign.exe'
     if (Test-Path $p) { return $p }
     return $null
 }
@@ -201,14 +207,14 @@ function Install-Cosign {
             Remove-Item $tmp -ErrorAction SilentlyContinue
             Write-Host "  [!] cosign SHA256 mismatch" -ForegroundColor Yellow; return $null
         }
-        if (-not (Test-Path $LocalBin)) { New-Item -ItemType Directory -Path $LocalBin -Force | Out-Null }
-        Move-Item -Path $tmp -Destination (Join-Path $LocalBin 'cosign.exe') -Force
+        if (-not (Test-Path $LocalBinDir)) { New-Item -ItemType Directory -Path $LocalBinDir -Force | Out-Null }
+        Move-Item -Path $tmp -Destination (Join-Path $LocalBinDir 'cosign.exe') -Force
     } catch {
         Remove-Item $tmp -ErrorAction SilentlyContinue
         Write-Host ("  [!] cosign install failed: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
         return $null
     }
-    $exe = Join-Path $LocalBin 'cosign.exe'
+    $exe = Join-Path $LocalBinDir 'cosign.exe'
     if (Test-Path $exe) { return $exe }
     return $null
 }
@@ -308,7 +314,7 @@ if ($cosignPath) {
 
 # Extend the current session's PATH so Section 2's calls to cosign / git
 # find the just-installed binaries without a new shell.
-$env:PATH = "$LocalBin;$LocalPwshDir;$(Join-Path $LocalGitDir 'cmd');$env:PATH"
+$env:PATH = "$LocalBinDir;$LocalPwshDir;$(Join-Path $LocalGitDir 'cmd');$env:PATH"
 
 # ── Section 2: sm-welcome ─────────────────────────────────────────────
 # Fast-path resolution: if the binary is already on disk, ask the channel

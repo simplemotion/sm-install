@@ -162,10 +162,12 @@ Write-Host ("  [v] {0} Checksum verified (SHA256: {1})" -f (Format-Step 3), $act
 # Locate cosign. sm-welcome.ps1's Section 1 always installs cosign to
 # ~/.local/bin/cosign.exe (100% local toolchain — any system-wide cosign
 # is ignored). We only probe that one path so this script picks up
-# exactly the binary Section 1 provisioned.
+# exactly the binary Section 1 provisioned. $script:CosignProbePath is
+# remembered so the skip-reason message can name the path that wasn't
+# there, making "cosign not installed" actionable instead of opaque.
 function Find-Cosign {
-    $local = Join-Path $HOME '.local\bin\cosign.exe'
-    if (Test-Path $local) { return $local }
+    $script:CosignProbePath = Join-Path $HOME '.local\bin\cosign.exe'
+    if (Test-Path $script:CosignProbePath) { return $script:CosignProbePath }
     return $null
 }
 
@@ -212,7 +214,7 @@ if ($bundleOk -and $cosignBin) {
         exit 1
     }
 } elseif ($bundleOk) {
-    Write-Host ("  [-] {0} Provenance check skipped (cosign not installed)" -f (Format-Step 4)) -ForegroundColor DarkGray
+    Write-Host ("  [-] {0} Provenance check skipped (cosign not found at {1})" -f (Format-Step 4), $script:CosignProbePath) -ForegroundColor DarkGray
 } else {
     Write-Host ("  [-] {0} Provenance check skipped (no sigstore bundle on release)" -f (Format-Step 4)) -ForegroundColor DarkGray
 }
@@ -263,6 +265,13 @@ function Install-Binary {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
     $dest = Join-Path $InstallDir "$Package.exe"
+    # Defensive: an earlier sm-welcome.ps1 bug (case-insensitive $LocalBin
+    # collision) could leave a *directory* at this path containing other
+    # tool binaries. Move-Item -Force can't replace a non-empty dir with
+    # a file, so wipe stale directories before placing the binary.
+    if ((Test-Path $dest) -and (Get-Item $dest).PSIsContainer) {
+        Remove-Item $dest -Recurse -Force
+    }
     Move-Item -Path $tmpBin -Destination $dest -Force
     Write-InstallReceipt -Pkg $Package -Channel $Channel -Tag $Version -SourceRepo $SourceRepo -Sha $actual
     Write-Host ("  [v] {0} Installed {1} to {2}" -f (Format-Step 5), $Package, $dest) -ForegroundColor Green
