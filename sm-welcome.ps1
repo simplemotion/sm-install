@@ -5,14 +5,17 @@
 #   irm https://install.simplemotion.com/sm-welcome.ps1 | iex
 #   $env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 | iex
 #
-# Three interactive sections, each gated by a Y/n prompt:
-#   1. Prerequisites — install PowerShell 7 + Git via winget (skipped per
-#                      package if already present)
-#   2. sm-welcome    — download + verify sm-welcome.exe from the selected
-#                      channel; fast-paths if local copy is already at the
-#                      latest tag
+# Three interactive sections, each gated by a Y/n prompt and prefaced by
+# a splash explaining the section in detail:
+#   1. Prerequisites — install PowerShell 7, Git, and cosign via winget
+#                      (already-present packages are detected + skipped).
+#                      cosign powers Section 2's attestation check.
+#   2. sm-welcome    — download sm-welcome.exe from the selected channel,
+#                      verify SHA256 + sigstore build-provenance (cosign,
+#                      installed in Section 1), then install. Fast-paths
+#                      if the local copy is already at the latest tag.
 #   3. Launch        — exec sm-welcome.exe in a fresh pwsh 7 console so
-#                      the user lands in the modern shell going forward
+#                      the user lands in the modern shell going forward.
 #
 # Non-interactive override: set $env:SM_WELCOME_ASSUME_YES=1 to auto-accept
 # every section prompt (used by CI / unattended re-runs).
@@ -23,13 +26,28 @@ Write-Host ""
 Write-Host "  SimpleMotion — Development Environment Onboarding"
 Write-Host "  ══════════════════════════════════════════════════"
 Write-Host ""
+Write-Host "  Welcome. This bootstrap runs in three sections, each gated by a"
+Write-Host "  Y/n prompt so you can review before anything is changed:"
+Write-Host ""
+Write-Host "    1. Prerequisites  —  installs PowerShell 7, Git, and cosign via"
+Write-Host "                         winget (silent, agreements pre-accepted)."
+Write-Host "                         cosign verifies sm-welcome.exe's sigstore"
+Write-Host "                         build provenance in Section 2 before any"
+Write-Host "                         code from the release channel runs."
+Write-Host "    2. sm-welcome     —  download, SHA256-check, and attestation-"
+Write-Host "                         verify sm-welcome.exe, then install."
+Write-Host "    3. Launch         —  open sm-welcome in a new pwsh 7 console."
+Write-Host ""
+Write-Host "  We'll start with Section 1 next."
+Write-Host ""
 
 # Per-section gate. Prints a framed header + description, then blocks on
 # Read-Host until the user confirms. Default = Yes (Enter accepts). Any
 # other response aborts the entire bootstrap.
 function Confirm-Section($title, $lines) {
     Write-Host ""
-    Write-Host ("  ── {0} {1}" -f $title, ('─' * [Math]::Max(0, 36 - $title.Length)))
+    Write-Host ("  ── {0} {1}" -f $title, ('─' * [Math]::Max(0, 56 - $title.Length)))
+    Write-Host ""
     foreach ($l in $lines) { Write-Host ("      {0}" -f $l) }
     Write-Host ""
     if ($env:SM_WELCOME_ASSUME_YES) {
@@ -58,6 +76,30 @@ function Find-Pwsh7 {
     return $null
 }
 
+# Cosign isn't always on PATH in the session it was just winget-installed
+# into (PATH refresh requires a new shell), so we also check winget's
+# user-scope Links dir directly. sm-install.ps1 uses the same resolver.
+function Find-Cosign {
+    $cmd = Get-Command cosign -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\cosign.exe'),
+        (Join-Path $env:ProgramFiles 'WinGet\Links\cosign.exe')
+    )
+    foreach ($p in $candidates) {
+        if ($p -and (Test-Path $p)) { return $p }
+    }
+    $pkgsRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    if (Test-Path $pkgsRoot) {
+        $cosignDir = Get-ChildItem $pkgsRoot -Directory -Filter 'sigstore.cosign*' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($cosignDir) {
+            $exe = Get-ChildItem $cosignDir.FullName -Filter 'cosign*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($exe) { return $exe.FullName }
+        }
+    }
+    return $null
+}
+
 # sm-welcome's step-counter UI accounts for the bootstrap's pre-binary
 # steps via env vars the binary reads.
 $env:SM_WELCOME_NO_BANNER    = '1'
@@ -71,18 +113,36 @@ $channel    = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' }
 $installDir = if ($env:SM_INSTALL_DIR) { $env:SM_INSTALL_DIR } else { Join-Path $HOME '.simplemotion\bin' }
 $localBin   = Join-Path $installDir 'sm-welcome.exe'
 
-# ── Section 1: Prerequisites ───────────────────────────────────────────
-$pwshPath = Find-Pwsh7
-$gitCmd   = Get-Command git -ErrorAction SilentlyContinue
-$needPwsh = -not $pwshPath
-$needGit  = -not $gitCmd
+# ── Section 1: Prerequisites ──────────────────────────────────────────
+$pwshPath   = Find-Pwsh7
+$gitCmd     = Get-Command git -ErrorAction SilentlyContinue
+$cosignPath = Find-Cosign
+$needPwsh   = -not $pwshPath
+$needGit    = -not $gitCmd
+$needCosign = -not $cosignPath
 
 $prereqLines = @(
-    "Checks for PowerShell 7 and Git, and installs anything missing via winget.",
-    ("  PowerShell 7: {0}" -f $(if ($needPwsh) { 'will install (winget Microsoft.PowerShell)' } else { "already present ($pwshPath)" })),
-    ("  Git:          {0}" -f $(if ($needGit)  { 'will install (winget Git.Git)'           } else { "already present ($($gitCmd.Source))" }))
+    "Installs or verifies the three tools required for a secure bootstrap:",
+    "",
+    "  PowerShell 7  (winget Microsoft.PowerShell)  modern shell host",
+    "  Git           (winget Git.Git)               clones the employee repo",
+    "  cosign        (winget sigstore.cosign)       verifies sm-welcome's",
+    "                                               sigstore build-provenance",
+    "",
+    "All installs run silently with --accept-source-agreements and",
+    "--accept-package-agreements. Already-installed packages are skipped.",
+    "",
+    "cosign is the sole attestation verifier in Section 2 — if it doesn't",
+    "install successfully, the provenance check is skipped (SHA256 still",
+    "anchors integrity). Before sm-welcome.exe is installed or invoked, we",
+    "verify it was built by SimpleMotion's CI in 3400-0009-SM-Welcome.",
+    "",
+    "Detected state:",
+    ("  PowerShell 7: {0}" -f $(if ($needPwsh)   { 'missing — will install' } else { "present ($pwshPath)" })),
+    ("  Git:          {0}" -f $(if ($needGit)    { 'missing — will install' } else { "present ($($gitCmd.Source))" })),
+    ("  cosign:       {0}" -f $(if ($needCosign) { 'missing — will install' } else { "present ($cosignPath)" }))
 )
-Confirm-Section 'Prerequisites' $prereqLines
+Confirm-Section 'Section 1 of 3: Prerequisites' $prereqLines
 
 if ($needPwsh) {
     Write-Host "  [*] Installing PowerShell 7..." -ForegroundColor DarkGray
@@ -104,8 +164,18 @@ if ($needGit) {
         Write-Host "  [!] git not on PATH after winget install — sm-welcome will report this" -ForegroundColor Yellow
     }
 }
+if ($needCosign) {
+    Write-Host "  [*] Installing cosign..." -ForegroundColor DarkGray
+    winget install --id sigstore.cosign --source winget --silent --accept-source-agreements --accept-package-agreements | Out-Null
+    $cosignPath = Find-Cosign
+    if ($cosignPath) {
+        Write-Host ("  [v] cosign installed: {0}" -f $cosignPath) -ForegroundColor Green
+    } else {
+        Write-Host "  [!] cosign install failed — Section 2 will skip attestation verification (SHA256 still anchors integrity)" -ForegroundColor Yellow
+    }
+}
 
-# ── Section 2: sm-welcome ──────────────────────────────────────────────
+# ── Section 2: sm-welcome ─────────────────────────────────────────────
 # Fast-path resolution: if the binary is already on disk, ask the channel
 # repo for the latest tag. If they match, skip the download entirely.
 $skipDownload = $false
@@ -139,22 +209,31 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
     }
 }
 
-$smLines = @()
+$smLines = @(
+    "Downloads and verifies sm-welcome.exe from simplemotion/$channel before",
+    "any code from the release channel runs:",
+    "",
+    "  1. Fetch the binary plus two sidecar files:",
+    "       <asset>.sha256             content checksum",
+    "       <asset>.sigstore.jsonl     sigstore build-provenance bundle",
+    "  2. Hash the binary; compare against the .sha256 file.",
+    "  3. Verify the sigstore bundle with cosign — check the bundle's cert",
+    "     identity matches the 3400-0009-SM-Welcome source repo.",
+    "  4. Move the verified binary to $installDir.",
+    "",
+    "The binary is never installed or invoked until all checks pass."
+)
+$smLines += ""
 if ($skipDownload) {
-    $smLines += "Local sm-welcome $localVer is already at the latest tag for channel=$channel."
-    $smLines += "  Download step will be skipped; we'll launch the local binary."
+    $smLines += "Status: fast-path skip — local $localVer matches latest on channel=$channel."
+} elseif ($localVer -and $latestVer) {
+    $smLines += "Status: local $localVer → installing $latestVer (channel=$channel)."
+} elseif ($latestVer) {
+    $smLines += "Status: installing $latestVer (channel=$channel)."
 } else {
-    $smLines += "Downloads sm-welcome.exe from simplemotion/$channel, verifies SHA256 +"
-    $smLines += "  sigstore build-provenance, and installs to $installDir."
-    if ($localVer -and $latestVer) {
-        $smLines += ("  Local $localVer → installing $latestVer (channel=$channel).")
-    } elseif ($latestVer) {
-        $smLines += ("  Installing $latestVer (channel=$channel).")
-    } else {
-        $smLines += ("  Channel: $channel.")
-    }
+    $smLines += "Status: installing latest (channel=$channel)."
 }
-Confirm-Section 'sm-welcome' $smLines
+Confirm-Section 'Section 2 of 3: sm-welcome' $smLines
 
 if (-not $skipDownload) {
     $installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1')
@@ -166,19 +245,28 @@ if (-not $skipDownload) {
           -Mode 'install'
 }
 
-# ── Section 3: Launch ──────────────────────────────────────────────────
+# ── Section 3: Launch ─────────────────────────────────────────────────
 $launchLines = @()
 if ($pwshPath) {
-    $launchLines += "Opens sm-welcome.exe in a new PowerShell 7 console window so the"
-    $launchLines += "  rest of onboarding runs in the modern shell. The original window"
-    $launchLines += "  stays open; -NoExit keeps the new pwsh session alive afterward."
-    $launchLines += ("  pwsh: $pwshPath")
+    $launchLines += "Opens sm-welcome.exe in a brand-new PowerShell 7 console window."
+    $launchLines += "The original window stays open. -NoExit keeps the new pwsh"
+    $launchLines += "session alive after sm-welcome finishes, so onboarding lands you"
+    $launchLines += "in the modern shell rather than dropping back to PS 5.1."
+    $launchLines += ""
+    $launchLines += "Env vars set in this session (\$env:SM_EMAIL, \$env:SM_CHANNEL,"
+    $launchLines += "\$env:SM_WELCOME_*) flow through Start-Process and are visible"
+    $launchLines += "to sm-welcome.exe in the new console."
+    $launchLines += ""
+    $launchLines += ("  pwsh:   $pwshPath")
+    $launchLines += ("  binary: $localBin")
 } else {
-    $launchLines += "PowerShell 7 is unavailable; sm-welcome.exe will run in the current"
-    $launchLines += "  Windows PowerShell session instead."
+    $launchLines += "PowerShell 7 is unavailable, so sm-welcome.exe will run in the"
+    $launchLines += "current Windows PowerShell session instead. No new console window"
+    $launchLines += "is opened."
+    $launchLines += ""
+    $launchLines += ("  binary: $localBin")
 }
-$launchLines += ("  Binary: $localBin")
-Confirm-Section 'Launch' $launchLines
+Confirm-Section 'Section 3 of 3: Launch' $launchLines
 
 if ($pwshPath) {
     Start-Process $pwshPath -ArgumentList @('-NoExit', '-Command', "& '$localBin'")

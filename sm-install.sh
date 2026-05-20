@@ -2,8 +2,9 @@
 # SimpleMotion generic binary installer base (macOS + Linux).
 #
 # Resolves a SimpleMotion-published binary from a GitHub Releases-hosting
-# repo, verifies SHA256 (and attestation if `gh` is authed), and either
-# installs it to a PATH directory or execs it from a temp file.
+# repo, verifies SHA256 (plus sigstore attestation via cosign when cosign
+# is present on disk), and either installs it to a PATH directory or
+# execs it from a temp file.
 #
 # Usage (typically called by a thin per-product wrapper):
 #   sm-install.sh --package NAME [options] [-- ARGS...]
@@ -26,8 +27,8 @@
 #                                Useful for development or hosting on a
 #                                non-SimpleMotion repo.
 #   --source-repo OWNER/NAME     Repo the attestation is signed against
-#                                (anchors cert-identity in `gh attestation
-#                                verify`). Defaults to --repo.
+#                                (anchors the cosign cert-identity check).
+#                                Defaults to --repo.
 #   --tag-prefix PREFIX          For channel repos that host multiple
 #                                packages, filter the releases list to
 #                                tags starting with PREFIX (e.g.
@@ -67,9 +68,9 @@
 set -euo pipefail
 
 # Surface the dirs we and the sm-welcome Rust binary install into so
-# `command -v` finds our own tools (gh, sm-welcome, future helpers) on
-# the *first* run, before any rc-file PATH export has had a chance to
-# take effect in a new login shell.
+# `command -v` finds our own tools (cosign, sm-welcome, future helpers)
+# on the *first* run, before any rc-file PATH export has had a chance
+# to take effect in a new login shell.
 export PATH="$HOME/.simplemotion/bin:$HOME/.local/bin:$PATH"
 
 REPO=""
@@ -195,10 +196,9 @@ fi
 
 TMPBIN=$(mktemp)
 TMPSUM=$(mktemp)
-# `gh attestation verify --bundle` rejects any file whose extension
-# isn't `.json` or `.jsonl` (with "Error: bundle file extension not
-# supported"), so a bare mktemp path won't work. Append the canonical
-# sigstore-bundle suffix; clean up both the suffixed and bare paths.
+# Use the canonical sigstore-bundle suffix on the temp file (cosign and
+# gh both reject paths without `.json`/`.jsonl`). Clean up both the
+# suffixed and bare mktemp paths.
 TMPATT_RAW=$(mktemp)
 TMPATT="${TMPATT_RAW}.sigstore.jsonl"
 trap 'rm -f "$TMPBIN" "$TMPSUM" "$TMPATT" "$TMPATT_RAW"' EXIT
@@ -255,100 +255,48 @@ if [[ "$expected" != "$actual" ]]; then
 fi
 printf '  [%s✓%s] %s Checksum verified %s(SHA256: %s)%s\n' "$GREEN" "$RESET" "$(fmt_step 3)" "$DIM" "$actual" "$RESET"
 
-# Ensure a usable `gh` is on disk before attempting attestation. Runs
-# unconditionally so the bootstrap pays the one-time ~10s cost now
-# rather than on the next release that ships a bundle. Subsequent runs
-# find gh via the prepended `~/.local/bin` on PATH and skip the
-# download. Result lands in GH_BIN; empty string = bootstrap failed,
-# attestation skips.
-ensure_gh() {
-    GH_BIN=""
-    if command -v gh >/dev/null 2>&1; then
-        GH_BIN=$(command -v gh); return 0
+# Locate cosign without bootstrapping. sm-welcome.sh's Section 1 handles
+# the install (direct sigstore/cosign /releases/latest/download/ + SHA256
+# verify into ~/.local/bin/cosign); we just look in the same spot here so
+# sm-install.sh can also use cosign when called standalone after sm-welcome
+# has provisioned it.
+find_cosign() {
+    COSIGN_BIN=""
+    if command -v cosign >/dev/null 2>&1; then
+        COSIGN_BIN=$(command -v cosign); return 0
     fi
-    # Match the Rust sm-welcome step's location (installer.rs:60),
-    # so we don't fork a second canonical gh path across the bootstrap.
-    local gh_dir="$HOME/.local/bin"
-    local local_gh="${gh_dir}/gh"
-    local gh_tag gh_ver gh_os gh_arch gh_ext gh_asset gh_url gh_sums_url gh_tmp gh_sums_tmp gh_expected gh_actual
-    # Try the live cli/cli releases API first; fall back to a known-good
-    # pinned version if it fails (anonymous API rate-limit is 60/hr/IP and
-    # easy to hit when this script runs alongside other gh-using tooling).
-    # Bump the fallback periodically.
-    local GH_PIN="v2.89.0"
-    gh_tag=$(curl -fsSL "https://api.github.com/repos/cli/cli/releases/latest" 2>/dev/null \
-        | awk -F'"' '/"tag_name":/ {print $4; exit}') || gh_tag=""
-    if [[ -z "$gh_tag" ]]; then
-        printf '      [%s-%s] cli/cli release lookup failed (rate-limited?); using pinned %s\n' "$DIM" "$RESET" "$GH_PIN"
-        gh_tag="$GH_PIN"
+    if [[ -x "$HOME/.local/bin/cosign" ]]; then
+        COSIGN_BIN="$HOME/.local/bin/cosign"; return 0
     fi
-    gh_ver="${gh_tag#v}"
-    case "$OS" in
-        apple-darwin)      gh_os="macOS"; gh_ext="zip"    ;;
-        unknown-linux-gnu) gh_os="linux"; gh_ext="tar.gz" ;;
-        *) printf '      [%s-%s] gh bootstrap skipped (unsupported OS)\n' "$DIM" "$RESET"; return 1 ;;
-    esac
-    case "$ARCH" in
-        aarch64) gh_arch="arm64" ;;
-        x86_64)  gh_arch="amd64" ;;
-        *) printf '      [%s-%s] gh bootstrap skipped (unsupported arch)\n' "$DIM" "$RESET"; return 1 ;;
-    esac
-    gh_asset="gh_${gh_ver}_${gh_os}_${gh_arch}.${gh_ext}"
-    gh_url="https://github.com/cli/cli/releases/download/${gh_tag}/${gh_asset}"
-    gh_sums_url="https://github.com/cli/cli/releases/download/${gh_tag}/gh_${gh_ver}_checksums.txt"
-    gh_tmp=$(mktemp); gh_sums_tmp=$(mktemp)
-    if ! curl -fsSL "$gh_url" -o "$gh_tmp" 2>/dev/null \
-       || ! curl -fsSL "$gh_sums_url" -o "$gh_sums_tmp" 2>/dev/null; then
-        rm -f "$gh_tmp" "$gh_sums_tmp"
-        printf '      [%s-%s] gh bootstrap skipped (download failed)\n' "$DIM" "$RESET"; return 1
-    fi
-    gh_expected=$(awk -v a="$gh_asset" '$2 == a {print $1; exit}' "$gh_sums_tmp")
-    if command -v sha256sum >/dev/null 2>&1; then
-        gh_actual=$(sha256sum "$gh_tmp" | awk '{print $1}')
-    else
-        gh_actual=$(shasum -a 256 "$gh_tmp" | awk '{print $1}')
-    fi
-    if [[ -z "$gh_expected" || "$gh_expected" != "$gh_actual" ]]; then
-        rm -f "$gh_tmp" "$gh_sums_tmp"
-        printf '      [%s-%s] gh bootstrap skipped (SHA256 mismatch on cli/cli asset)\n' "$DIM" "$RESET"; return 1
-    fi
-    mkdir -p "$gh_dir"
-    case "$gh_ext" in
-        zip)    unzip -p "$gh_tmp" "gh_${gh_ver}_${gh_os}_${gh_arch}/bin/gh" >"$local_gh" 2>/dev/null ;;
-        tar.gz) tar  -xzOf "$gh_tmp" "gh_${gh_ver}_${gh_os}_${gh_arch}/bin/gh" >"$local_gh" 2>/dev/null ;;
-    esac
-    chmod 0755 "$local_gh" 2>/dev/null
-    rm -f "$gh_tmp" "$gh_sums_tmp"
-    if [[ -x "$local_gh" ]]; then
-        GH_BIN="$local_gh"
-        return 0
-    fi
-    printf '      [%s-%s] gh bootstrap skipped (extraction failed)\n' "$DIM" "$RESET"; return 1
+    return 1
 }
 
-# Attestation check, two paths in order of preference:
-#   1. Offline bundle (`<asset>.sigstore.jsonl`) — no API, no auth.
-#   2. API lookup against the source repo — needs authed gh with read
-#      access (SimpleMotion staff only).
-# Verification failure on path 1 is fatal; missing bundle plus unauthed
-# / unreadable source repo is a skip (SHA256 still anchors integrity).
-ensure_gh
-if [[ -n "$GH_BIN" ]]; then
-    if curl -fsSL "${URL}.sigstore.jsonl" -o "$TMPATT" 2>/dev/null; then
-        if "$GH_BIN" attestation verify "$TMPBIN" --bundle "$TMPATT" --repo "$SOURCE_REPO" >/dev/null 2>&1; then
-            printf '  [%s✓%s] %s Provenance verified (offline bundle, signed by %s)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO"
-        else
-            printf '  [%s✗%s] %s Provenance bundle present but failed verification (signed by %s)\n' "$RED" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO" >&2
-            exit 1
-        fi
-    elif "$GH_BIN" auth status >/dev/null 2>&1 \
-         && "$GH_BIN" attestation verify "$TMPBIN" --repo "$SOURCE_REPO" >/dev/null 2>&1; then
-        printf '  [%s✓%s] %s Provenance verified (API lookup against %s)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO"
+# Attestation check — cosign-only. sm-welcome.sh's Section 1 installs
+# cosign; without it we skip provenance verification entirely (SHA256
+# above still anchors integrity). Bundle present + cosign present +
+# verification fails is fatal.
+find_cosign || true
+if curl -fsSL "${URL}.sigstore.jsonl" -o "$TMPATT" 2>/dev/null && [[ -n "$COSIGN_BIN" ]]; then
+    # GitHub's OIDC subject embeds the source repo's workflow path. We
+    # match any workflow under the source repo with the standard GH
+    # Actions OIDC issuer. If the publish workflow ever moves outside
+    # `.github/workflows/`, update this regex.
+    cert_id_regex="https://github.com/${SOURCE_REPO}/\.github/workflows/.*"
+    if "$COSIGN_BIN" verify-blob-attestation \
+        --bundle "$TMPATT" \
+        --new-bundle-format \
+        --certificate-identity-regexp "$cert_id_regex" \
+        --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+        "$TMPBIN" >/dev/null 2>&1; then
+        printf '  [%s✓%s] %s Provenance verified (cosign, signed by %s)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO"
     else
-        printf '  [%s-%s] %s Provenance check skipped (no bundle on release; source repo unauthed or not readable)\n' "$DIM" "$RESET" "$(fmt_step 4)"
+        printf '  [%s✗%s] %s Provenance verification failed (cosign rejected the bundle)\n' "$RED" "$RESET" "$(fmt_step 4)" >&2
+        exit 1
     fi
+elif [[ -z "$COSIGN_BIN" ]]; then
+    printf '  [%s-%s] %s Provenance check skipped (cosign not installed)\n' "$DIM" "$RESET" "$(fmt_step 4)"
 else
-    printf '  [%s-%s] %s Provenance check skipped (gh unavailable and bootstrap failed)\n' "$DIM" "$RESET" "$(fmt_step 4)"
+    printf '  [%s-%s] %s Provenance check skipped (no sigstore bundle on release)\n' "$DIM" "$RESET" "$(fmt_step 4)"
 fi
 
 chmod +x "$TMPBIN"
