@@ -1,10 +1,9 @@
 # SimpleMotion generic binary installer base (Windows).
 #
 # Resolves a SimpleMotion-published binary from a GitHub Releases-hosting
-# repo, verifies SHA256 + sigstore build-provenance attestation, and
-# either installs it to PATH or execs it from a temp file. Bootstraps
-# `gh` into `~/.local/bin/gh.exe` if missing so attestation verification
-# works on fresh machines (matches the Bash side's `ensure_gh` flow).
+# repo, verifies SHA256 + sigstore build-provenance attestation via
+# cosign (installed in sm-welcome.ps1's Section 1 via winget), and
+# either installs it to PATH or execs it from a temp file.
 #
 # Usage (typically called by a thin per-product wrapper):
 #   irm "https://install.simplemotion.com/sm-install.ps1" |
@@ -57,9 +56,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Surface SimpleMotion bins + the gh bootstrap dir so `Get-Command` finds
-# our own tools on the *first* run, before any profile-script PATH edit
-# has taken effect in a new PowerShell session.
+# Surface SimpleMotion bins on `Get-Command` for the *first* run, before
+# any profile-script PATH edit has taken effect in a new PowerShell
+# session. (~/.local/bin is included for parity with the Bash side.)
 $env:PATH = (Join-Path $HOME '.simplemotion\bin') + ';' + (Join-Path $HOME '.local\bin') + ';' + $env:PATH
 
 if (-not $Channel) { $Channel = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' } }
@@ -159,138 +158,68 @@ if ($expected -ne $actual) {
 }
 Write-Host ("  [v] {0} Checksum verified (SHA256: {1})" -f (Format-Step 3), $actual) -ForegroundColor Green
 
-# Ensure a usable `gh` is on disk before attempting attestation. Mirrors
-# the Bash side's `ensure_gh`: returns the path to a usable gh, or $null
-# if bootstrapping failed (in which case the attestation check is skipped
-# — SHA256 still anchors integrity). Runs unconditionally so the one-time
-# ~10s cost lands now instead of on the next release that ships a bundle.
-function Ensure-Gh {
-    $cmd = Get-Command gh -ErrorAction SilentlyContinue
+# Locate a winget-installed cosign without requiring a fresh-shell PATH
+# refresh. Mirrors sm-welcome.ps1's resolver: checks PATH, then winget's
+# Links shim dir, then the package install directory.
+function Find-Cosign {
+    $cmd = Get-Command cosign -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
-
-    # Match the Rust sm-welcome step's location (installer.rs:60) and the
-    # Bash installer (~/.local/bin/gh) so we don't fork a second canonical
-    # gh path across the bootstrap.
-    $ghDir = Join-Path $HOME '.local\bin'
-    $localGh = Join-Path $ghDir 'gh.exe'
-    Write-Host ("      [*] Bootstrapping gh (kept at {0} for future runs)..." -f $localGh) -ForegroundColor DarkGray
-
-    # Try the live cli/cli releases API; fall back to a known-good pinned
-    # version on rate-limit (anon API is 60/hr/IP). Bump the fallback
-    # periodically — keep in lock-step with the Bash side's GH_PIN.
-    $ghPin = 'v2.89.0'
-    $ghTag = $null
-    try {
-        $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/cli/cli/releases/latest' -UseBasicParsing -ErrorAction Stop
-        $ghTag = $rel.tag_name
-    } catch { $ghTag = $null }
-    if (-not $ghTag) {
-        Write-Host ("      [-] cli/cli release lookup failed (rate-limited?); using pinned {0}" -f $ghPin) -ForegroundColor DarkGray
-        $ghTag = $ghPin
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\cosign.exe'),
+        (Join-Path $env:ProgramFiles 'WinGet\Links\cosign.exe')
+    )
+    foreach ($p in $candidates) {
+        if ($p -and (Test-Path $p)) { return $p }
     }
-    $ghVer = $ghTag.TrimStart('v')
-
-    $ghArch = if ($arch -eq 'aarch64') { 'arm64' } else { 'amd64' }
-    $ghAsset = "gh_${ghVer}_windows_${ghArch}.zip"
-    $ghUrl       = "https://github.com/cli/cli/releases/download/${ghTag}/${ghAsset}"
-    $ghSumsUrl   = "https://github.com/cli/cli/releases/download/${ghTag}/gh_${ghVer}_checksums.txt"
-
-    $tmpZip  = Join-Path $env:TEMP ("gh-bootstrap-{0}.zip" -f ([Guid]::NewGuid().ToString('N')))
-    $tmpSums = "$tmpZip.sums"
-    try {
-        Invoke-WebRequest -Uri $ghUrl     -OutFile $tmpZip  -UseBasicParsing -ErrorAction Stop
-        Invoke-WebRequest -Uri $ghSumsUrl -OutFile $tmpSums -UseBasicParsing -ErrorAction Stop
-    } catch {
-        Remove-Item $tmpZip, $tmpSums -ErrorAction SilentlyContinue
-        Write-Host "      [-] gh bootstrap skipped (download failed)" -ForegroundColor DarkGray
-        return $null
-    }
-
-    # cli/cli's checksums.txt is `<sha>  <asset>` per line.
-    $expected = $null
-    foreach ($line in Get-Content $tmpSums) {
-        $parts = $line -split '\s+'
-        if ($parts.Count -ge 2 -and $parts[1] -eq $ghAsset) { $expected = $parts[0]; break }
-    }
-    Remove-Item $tmpSums -ErrorAction SilentlyContinue
-    $actual = (Get-FileHash -Path $tmpZip -Algorithm SHA256).Hash.ToLower()
-    if (-not $expected -or $expected.ToLower() -ne $actual) {
-        Remove-Item $tmpZip -ErrorAction SilentlyContinue
-        Write-Host "      [-] gh bootstrap skipped (SHA256 mismatch on cli/cli asset)" -ForegroundColor DarkGray
-        return $null
-    }
-
-    if (-not (Test-Path $ghDir)) { New-Item -ItemType Directory -Path $ghDir -Force | Out-Null }
-    $extractDir = Join-Path $env:TEMP ("gh-extract-{0}" -f ([Guid]::NewGuid().ToString('N')))
-    try {
-        Expand-Archive -Path $tmpZip -DestinationPath $extractDir -Force
-        $inner = Get-ChildItem -Path $extractDir -Recurse -Filter 'gh.exe' | Select-Object -First 1
-        if (-not $inner) {
-            Write-Host "      [-] gh bootstrap skipped (gh.exe not in archive)" -ForegroundColor DarkGray
-            return $null
+    $pkgsRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    if (Test-Path $pkgsRoot) {
+        $cosignDir = Get-ChildItem $pkgsRoot -Directory -Filter 'sigstore.cosign*' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($cosignDir) {
+            $exe = Get-ChildItem $cosignDir.FullName -Filter 'cosign*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($exe) { return $exe.FullName }
         }
-        Copy-Item -Path $inner.FullName -Destination $localGh -Force
-    } catch {
-        Write-Host "      [-] gh bootstrap skipped (extraction failed)" -ForegroundColor DarkGray
-        return $null
-    } finally {
-        Remove-Item $tmpZip -ErrorAction SilentlyContinue
-        Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
     }
-
-    if (Test-Path $localGh) {
-        Write-Host ("      [v] Installed gh {0} to {1}" -f $ghVer, $localGh) -ForegroundColor Green
-        return $localGh
-    }
-    Write-Host "      [-] gh bootstrap skipped (extraction failed)" -ForegroundColor DarkGray
     return $null
 }
 
-# Attestation check, two paths in order of preference:
-#   1. Offline bundle (`<asset>.sigstore.jsonl`) — no API, no auth.
-#   2. API lookup against the source repo — needs authed gh with read
-#      access (SimpleMotion staff only).
-# Verification failure on path 1 is fatal; missing bundle plus unauthed /
-# unreadable source repo is a skip (SHA256 still anchors integrity).
-$ghBin = Ensure-Gh
-if ($ghBin) {
-    $bundleUrl = "$url.sigstore.jsonl"
-    $tmpAtt = [System.IO.Path]::Combine($env:TEMP, "$Package-$([Guid]::NewGuid().ToString('N')).sigstore.jsonl")
-    $bundleOk = $false
-    try {
-        Invoke-WebRequest -Uri $bundleUrl -OutFile $tmpAtt -UseBasicParsing -ErrorAction Stop
-        $bundleOk = $true
-    } catch { $bundleOk = $false }
+# Attestation check — cosign-only. sm-welcome.ps1's Section 1 installs
+# cosign via winget; without it, we skip provenance verification entirely
+# (SHA256 above still anchors integrity). Bundle present + cosign present
+# + verification fails is fatal.
+$bundleUrl = "$url.sigstore.jsonl"
+$tmpAtt = [System.IO.Path]::Combine($env:TEMP, "$Package-$([Guid]::NewGuid().ToString('N')).sigstore.jsonl")
+$bundleOk = $false
+try {
+    Invoke-WebRequest -Uri $bundleUrl -OutFile $tmpAtt -UseBasicParsing -ErrorAction Stop
+    $bundleOk = $true
+} catch { $bundleOk = $false }
 
-    if ($bundleOk) {
-        & $ghBin attestation verify $tmpBin --bundle $tmpAtt --repo $SourceRepo *> $null
-        $code = $LASTEXITCODE
-        Remove-Item $tmpAtt -ErrorAction SilentlyContinue
-        if ($code -eq 0) {
-            Write-Host ("  [v] {0} Provenance verified (offline bundle, signed by {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
-        } else {
-            Write-Host ("  [x] {0} Provenance bundle present but failed verification (signed by {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Red
-            Remove-Item $tmpBin -ErrorAction SilentlyContinue
-            exit 1
-        }
+$cosignBin = Find-Cosign
+if ($bundleOk -and $cosignBin) {
+    # GitHub's OIDC subject embeds the source repo's workflow path. We
+    # match any workflow under the source repo with the standard GH
+    # Actions OIDC issuer. If the publish workflow ever moves outside
+    # `.github/workflows/`, update this regex.
+    $certIdRegex = "https://github.com/$SourceRepo/\.github/workflows/.*"
+    & $cosignBin verify-blob-attestation `
+        --bundle $tmpAtt `
+        --new-bundle-format `
+        --certificate-identity-regexp $certIdRegex `
+        --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' `
+        $tmpBin *> $null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host ("  [v] {0} Provenance verified (cosign, signed by {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
     } else {
-        Remove-Item $tmpAtt -ErrorAction SilentlyContinue
-        & $ghBin auth status *> $null
-        $authed = ($LASTEXITCODE -eq 0)
-        if ($authed) {
-            & $ghBin attestation verify $tmpBin --repo $SourceRepo *> $null
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host ("  [v] {0} Provenance verified (API lookup against {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
-            } else {
-                Write-Host ("  [-] {0} Provenance check skipped (no bundle on release; source repo unauthed or not readable)" -f (Format-Step 4)) -ForegroundColor DarkGray
-            }
-        } else {
-            Write-Host ("  [-] {0} Provenance check skipped (no bundle on release; source repo unauthed or not readable)" -f (Format-Step 4)) -ForegroundColor DarkGray
-        }
+        Write-Host ("  [x] {0} Provenance verification failed (cosign rejected the bundle)" -f (Format-Step 4)) -ForegroundColor Red
+        Remove-Item $tmpAtt, $tmpBin -ErrorAction SilentlyContinue
+        exit 1
     }
+} elseif ($bundleOk) {
+    Write-Host ("  [-] {0} Provenance check skipped (cosign not installed)" -f (Format-Step 4)) -ForegroundColor DarkGray
 } else {
-    Write-Host ("  [-] {0} Provenance check skipped (gh unavailable and bootstrap failed)" -f (Format-Step 4)) -ForegroundColor DarkGray
+    Write-Host ("  [-] {0} Provenance check skipped (no sigstore bundle on release)" -f (Format-Step 4)) -ForegroundColor DarkGray
 }
+Remove-Item $tmpAtt -ErrorAction SilentlyContinue
 
 # Install-receipt: a per-package TOML at
 # `~/.simplemotion/install-receipt/<package>.toml` recording the channel,
