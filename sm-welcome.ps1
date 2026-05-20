@@ -130,6 +130,22 @@ function Get-LatestRelease($repo) {
         return $null
     }
 }
+# PortableGit's 7z extract sets read-only attributes on parts of the tree
+# (and antivirus / OneDrive can briefly hold file handles), which makes a
+# plain `Remove-Item -Recurse -Force` fail with "You do not have sufficient
+# access rights". cmd's rmdir /s /q ignores attributes and retries through
+# transient locks, so we shell out to it for the trickiest cleanups.
+function Remove-TreeForcefully($path) {
+    if (-not (Test-Path $path)) { return }
+    cmd /c "rmdir /s /q `"$path`"" 2>$null
+    if (Test-Path $path) {
+        # Fallback for tree paths that confuse cmd's rmdir (e.g. long paths
+        # without the `\\?\` prefix). Clear read-only first, then retry.
+        Get-ChildItem $path -Recurse -Force -ErrorAction SilentlyContinue |
+            ForEach-Object { try { $_.Attributes = 'Normal' } catch {} }
+        Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 function Confirm-AssetDigest($file, $asset) {
     $expected = ($asset.digest -replace '^sha256:', '').ToLower()
     if (-not $expected) { return $false }
@@ -151,7 +167,7 @@ function Install-PwshPortable {
             Remove-Item $tmp -ErrorAction SilentlyContinue
             Write-Host "  [!] PowerShell SHA256 mismatch" -ForegroundColor Yellow; return $null
         }
-        if (Test-Path $LocalPwshDir) { Remove-Item $LocalPwshDir -Recurse -Force }
+        Remove-TreeForcefully $LocalPwshDir
         New-Item -ItemType Directory -Path $LocalPwshDir -Force | Out-Null
         Expand-Archive -Path $tmp -DestinationPath $LocalPwshDir -Force
     } finally {
@@ -177,7 +193,7 @@ function Install-GitPortable {
             Remove-Item $tmp -ErrorAction SilentlyContinue
             Write-Host "  [!] Git SHA256 mismatch" -ForegroundColor Yellow; return $null
         }
-        if (Test-Path $LocalGitDir) { Remove-Item $LocalGitDir -Recurse -Force }
+        Remove-TreeForcefully $LocalGitDir
         New-Item -ItemType Directory -Path $LocalGitDir -Force | Out-Null
         # PortableGit-*.7z.exe is a 7z self-extractor. `-o<dir>` sets the
         # output dir, `-y` suppresses prompts. Wait for completion before
