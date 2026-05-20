@@ -57,6 +57,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Source the shared install-toolchain library (Confirm-Section,
+# Get-LatestRelease, Confirm-AssetDigest, Remove-TreeForcefully,
+# Find-Cosign, Install-Cosign, Initialize-CosignTuf). sm-welcome.ps1
+# loads the same lib at startup, so functions are consistent across the
+# bootstrap and standalone-install code paths.
+$smInstallLib = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install-lib.ps1')
+Invoke-Expression $smInstallLib
+
 # Surface SimpleMotion bins on `Get-Command` for the *first* run, before
 # any profile-script PATH edit has taken effect in a new PowerShell
 # session. (~/.local/bin is included for parity with the Bash side.)
@@ -159,18 +167,6 @@ if ($expected -ne $actual) {
 }
 Write-Host ("  [v] {0} Checksum verified (SHA256: {1})" -f (Format-Step 3), $actual) -ForegroundColor Green
 
-# Locate cosign. sm-welcome.ps1's Section 1 always installs cosign to
-# ~/.local/bin/cosign.exe (100% local toolchain — any system-wide cosign
-# is ignored). We only probe that one path so this script picks up
-# exactly the binary Section 1 provisioned. $script:CosignProbePath is
-# remembered so the skip-reason message can name the path that wasn't
-# there, making "cosign not installed" actionable instead of opaque.
-function Find-Cosign {
-    $script:CosignProbePath = Join-Path $HOME '.local\bin\cosign.exe'
-    if (Test-Path $script:CosignProbePath) { return $script:CosignProbePath }
-    return $null
-}
-
 # Attestation check — cosign-only. Verification of GitHub-issued
 # attestations needs cosign pointed at GitHub's private Sigstore TUF
 # (sm-welcome.ps1 ran `cosign initialize --mirror https://tuf-repo.github.com`
@@ -188,12 +184,20 @@ try {
 } catch { $bundleOk = $false }
 
 # Default TUF_ROOT if Section 1 hasn't been through (e.g., sm-install.ps1
-# invoked standalone). Will be empty/uninitialized if no init ever ran;
-# cosign will then fall back to the public-good Sigstore and reject the
-# GitHub-issued leaf cert — caller can spot that in the error.
+# invoked standalone).
 if (-not $env:TUF_ROOT) { $env:TUF_ROOT = Join-Path $HOME '.simplemotion\sigstore' }
 
+# Self-bootstrap cosign if it's missing (sm-install.ps1 may be called
+# directly without sm-welcome.ps1's Section 1 having provisioned it).
+# Both Install-Cosign and Initialize-CosignTuf come from sm-install-lib.ps1.
 $cosignBin = Find-Cosign
+if ($bundleOk -and -not $cosignBin) {
+    Write-Host ("      [*] cosign not on disk — bootstrapping...") -ForegroundColor DarkGray
+    $cosignBin = Install-Cosign
+    if ($cosignBin) {
+        Initialize-CosignTuf $cosignBin | Out-Null
+    }
+}
 if ($bundleOk -and $cosignBin) {
     $certIdRegex = "https://github.com/$SourceRepo/\.github/workflows/.*"
     & $cosignBin verify-blob-attestation `
@@ -214,7 +218,7 @@ if ($bundleOk -and $cosignBin) {
         exit 1
     }
 } elseif ($bundleOk) {
-    Write-Host ("  [-] {0} Provenance check skipped (cosign not found at {1})" -f (Format-Step 4), $script:CosignProbePath) -ForegroundColor DarkGray
+    Write-Host ("  [-] {0} Provenance check skipped (cosign bootstrap failed)" -f (Format-Step 4)) -ForegroundColor DarkGray
 } else {
     Write-Host ("  [-] {0} Provenance check skipped (no sigstore bundle on release)" -f (Format-Step 4)) -ForegroundColor DarkGray
 }

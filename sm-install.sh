@@ -68,6 +68,12 @@
 
 set -euo pipefail
 
+# Source the shared install-toolchain library (confirm_section,
+# find_cosign, ensure_cosign, initialize_cosign_tuf). sm-welcome.sh
+# loads the same lib at startup, so functions are consistent across
+# the bootstrap and standalone-install code paths.
+eval "$(curl -fsSL https://install.simplemotion.com/sm-install-lib.sh)"
+
 # Surface the dirs we and the sm-welcome Rust binary install into so
 # `command -v` finds our own tools (cosign, sm-welcome, future helpers)
 # on the *first* run, before any rc-file PATH export has had a chance
@@ -256,21 +262,8 @@ if [[ "$expected" != "$actual" ]]; then
 fi
 printf '  [%s✓%s] %s Checksum verified %s(SHA256: %s)%s\n' "$GREEN" "$RESET" "$(fmt_step 3)" "$DIM" "$actual" "$RESET"
 
-# Locate cosign. sm-welcome.sh's Section 1 always installs cosign to
-# ~/.local/bin/cosign (100% local toolchain — any system-wide cosign
-# from Homebrew / apt / dnf is ignored). We only probe that one path.
-find_cosign() {
-    COSIGN_BIN=""
-    if [[ -x "$HOME/.local/bin/cosign" ]]; then
-        COSIGN_BIN="$HOME/.local/bin/cosign"; return 0
-    fi
-    return 1
-}
-
 # Default TUF_ROOT if Section 1 hasn't been through (e.g., sm-install.sh
-# invoked standalone). Without an initialized TUF cache cosign falls back
-# to the public-good Sigstore and rejects GitHub-issued leaf certs —
-# caller can spot that in the error.
+# invoked standalone).
 : "${TUF_ROOT:=$HOME/.simplemotion/sigstore}"
 export TUF_ROOT
 
@@ -280,8 +273,20 @@ export TUF_ROOT
 # inclusion proofs, no SCTs on the leaf cert, SLSA-v1 predicate type.
 # Bundle present + cosign rejects is fatal. Bundle present + cosign
 # missing skips (SHA256 above still anchors integrity).
+#
+# Self-bootstrap cosign if it's missing (sm-install.sh may be called
+# directly without sm-welcome.sh's Section 1 having provisioned it).
+# Both ensure_cosign and initialize_cosign_tuf come from sm-install-lib.sh.
 find_cosign || true
-if curl -fsSL "${URL}.sigstore.jsonl" -o "$TMPATT" 2>/dev/null && [[ -n "$COSIGN_BIN" ]]; then
+if curl -fsSL "${URL}.sigstore.jsonl" -o "$TMPATT" 2>/dev/null; then
+    if [[ -z "$COSIGN_BIN" ]]; then
+        printf '      [*] cosign not on disk — bootstrapping...\n'
+        if ensure_cosign; then
+            initialize_cosign_tuf "$COSIGN_BIN" >/dev/null 2>&1 || true
+        fi
+    fi
+fi
+if [[ -s "$TMPATT" ]] && [[ -n "$COSIGN_BIN" ]]; then
     cert_id_regex="https://github.com/${SOURCE_REPO}/\.github/workflows/.*"
     if "$COSIGN_BIN" verify-blob-attestation \
         --bundle "$TMPATT" \
