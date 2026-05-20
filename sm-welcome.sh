@@ -17,8 +17,10 @@
 #   1. Prerequisites — verify git, curl, bash are present; auto-install
 #                      cosign via direct sigstore/cosign release download
 #                      + SHA256-verify into ~/.local/bin/cosign (no sudo,
-#                      no Homebrew). Missing git/curl are flagged but not
-#                      auto-installed — those require sudo or a GUI prompt.
+#                      no Homebrew); then run `cosign initialize` against
+#                      GitHub's Sigstore TUF so cosign can verify GitHub-
+#                      issued attestations natively. Missing git/curl
+#                      are flagged but not auto-installed (sudo / Xcode).
 #   2. sm-welcome    — download sm-welcome from the selected channel,
 #                      verify SHA256 + sigstore build-provenance (cosign,
 #                      installed in Section 1). Fast-paths if the local
@@ -29,6 +31,10 @@
 # every section prompt (used by CI / unattended re-runs).
 
 set -euo pipefail
+
+# Per-SimpleMotion TUF cache so we don't clobber any existing public-good
+# Sigstore trust under ~/.sigstore. Exported so sm-install.sh picks it up.
+export TUF_ROOT="${TUF_ROOT:-$HOME/.simplemotion/sigstore}"
 
 printf '\n  SimpleMotion — Development Environment Onboarding\n  ══════════════════════════════════════════════════\n\n'
 cat <<'EOF'
@@ -182,6 +188,30 @@ ensure_cosign() {
     return 0
 }
 
+# Point cosign at GitHub's Sigstore TUF repo so it can verify GitHub-issued
+# attestations natively. Cosign walks the TUF chain from 1.root.json,
+# fetches the current trusted_root.json (containing GitHub's Fulcio CA +
+# TSA pubkeys), and caches everything under $TUF_ROOT. Idempotent.
+initialize_cosign_tuf() {
+    local cosign="$1"
+    [[ -n "$cosign" ]] || return 1
+    mkdir -p "$TUF_ROOT"
+    local tmp_root
+    tmp_root=$(mktemp)
+    if ! curl -fsSL "https://tuf-repo.github.com/1.root.json" -o "$tmp_root" 2>/dev/null; then
+        rm -f "$tmp_root"
+        printf '      [-] cosign TUF init skipped (couldn'\''t fetch 1.root.json)\n'
+        return 1
+    fi
+    if "$cosign" initialize --mirror "https://tuf-repo.github.com" --root "$tmp_root" >/dev/null 2>&1; then
+        rm -f "$tmp_root"
+        return 0
+    fi
+    rm -f "$tmp_root"
+    printf '      [-] cosign TUF init failed\n'
+    return 1
+}
+
 # ── Section 1: Prerequisites ──────────────────────────────────────────
 detect_state() {
     if command -v "$1" >/dev/null 2>&1; then
@@ -213,9 +243,11 @@ PREREQ_LINES=(
     "  bash    the script you're reading is bash; sm-welcome assumes 3.2+"
     "  cosign  fetched from sigstore/cosign's /releases/latest/download/"
     "          redirect, SHA256-verified against cosign_checksums.txt,"
-    "          installed to ~/.local/bin/cosign. No Homebrew, no sudo."
-    "          If the cosign bootstrap fails, Section 2 skips attestation"
-    "          verification (SHA256 still anchors integrity)."
+    "          installed to ~/.local/bin/cosign (no Homebrew, no sudo)."
+    "          After install we run `cosign initialize --mirror"
+    "          https://tuf-repo.github.com` so cosign can verify GitHub-"
+    "          issued attestations natively (no gh in the chain). The"
+    "          TUF cache lands in ~/.simplemotion/sigstore."
     ""
     "Detected state:"
     "  git:    $GIT_STATE"
@@ -239,6 +271,19 @@ if [[ "$COSIGN_STATE" == "missing" ]]; then
         printf '  [v] cosign installed: %s\n' "$COSIGN_BIN"
     else
         printf '  [!] cosign install failed — Section 2 will skip attestation verification (SHA256 still anchors integrity).\n'
+    fi
+else
+    # Resolve $COSIGN_BIN for the TUF init step below.
+    if command -v cosign >/dev/null 2>&1; then COSIGN_BIN=$(command -v cosign)
+    elif [[ -x "$HOME/.local/bin/cosign" ]]; then COSIGN_BIN="$HOME/.local/bin/cosign"
+    fi
+fi
+if [[ -n "${COSIGN_BIN:-}" ]]; then
+    printf '  [*] Initializing cosign TUF trust (tuf-repo.github.com)...\n'
+    if initialize_cosign_tuf "$COSIGN_BIN"; then
+        printf '  [v] cosign TUF initialized in %s\n' "$TUF_ROOT"
+    else
+        printf '  [!] cosign TUF init failed — Section 2 will skip attestation verification.\n'
     fi
 fi
 
@@ -273,8 +318,9 @@ SM_LINES=(
     "       <asset>.sha256             content checksum"
     "       <asset>.sigstore.jsonl     sigstore build-provenance bundle"
     "  2. Hash the binary; compare against the .sha256 file."
-    "  3. Verify the sigstore bundle with cosign — check the bundle's cert"
-    "     identity matches the 3400-0009-SM-Welcome source repo."
+    "  3. Verify the sigstore bundle with cosign against GitHub's Sigstore"
+    "     TUF (set up in Section 1) — checks the bundle's cert identity"
+    "     matches the 3400-0009-SM-Welcome source repo."
     "  4. Move the verified binary to $INSTALL_DIR."
     ""
     "The binary is never installed or invoked until all checks pass."

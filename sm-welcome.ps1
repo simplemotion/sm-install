@@ -7,15 +7,20 @@
 #
 # Three interactive sections, each gated by a Y/n prompt and prefaced by
 # a splash explaining the section in detail:
-#   1. Prerequisites — install PowerShell 7, Git, and cosign via winget
-#                      (already-present packages are detected + skipped).
-#                      cosign powers Section 2's attestation check.
+#   1. Prerequisites — install PowerShell 7, Git, and cosign into
+#                      ~/.local/bin via direct GitHub-release downloads
+#                      (SHA256-verified against the API-published asset
+#                      digests), then initialize cosign's TUF trust
+#                      against GitHub's Sigstore (`tuf-repo.github.com`)
+#                      so it can verify GitHub-issued attestations
+#                      natively. No winget, no MSI, no sudo, no gh.
 #   2. sm-welcome    — download sm-welcome.exe from the selected channel,
-#                      verify SHA256 + sigstore build-provenance (cosign,
-#                      installed in Section 1), then install. Fast-paths
-#                      if the local copy is already at the latest tag.
-#   3. Launch        — exec sm-welcome.exe in a fresh pwsh 7 console so
-#                      the user lands in the modern shell going forward.
+#                      verify SHA256 + sigstore build-provenance with
+#                      cosign, then install. Fast-paths if the local
+#                      copy is already at the latest tag.
+#   3. Launch        — exec sm-welcome.exe in a fresh pwsh 7 console
+#                      (using ~/.local/bin/pwsh-7/pwsh.exe) so the user
+#                      lands in the modern shell going forward.
 #
 # Non-interactive override: set $env:SM_WELCOME_ASSUME_YES=1 to auto-accept
 # every section prompt (used by CI / unattended re-runs).
@@ -29,12 +34,14 @@ Write-Host ""
 Write-Host "  Welcome. This bootstrap runs in three sections, each gated by a"
 Write-Host "  Y/n prompt so you can review before anything is changed:"
 Write-Host ""
-Write-Host "    1. Prerequisites  —  installs PowerShell 7, Git, and cosign via"
-Write-Host "                         winget (silent, agreements pre-accepted)."
-Write-Host "                         cosign verifies sm-welcome.exe's sigstore"
-Write-Host "                         build provenance in Section 2 before any"
-Write-Host "                         code from the release channel runs."
-Write-Host "    2. sm-welcome     —  download, SHA256-check, and attestation-"
+Write-Host "    1. Prerequisites  —  installs PowerShell 7, Git, and cosign"
+Write-Host "                         to ~/.local/bin via direct downloads"
+Write-Host "                         from each project's GitHub release"
+Write-Host "                         (SHA256-verified against the API-"
+Write-Host "                         published digests), then initializes"
+Write-Host "                         cosign's TUF trust against GitHub's"
+Write-Host "                         Sigstore. No winget, no MSI, no gh."
+Write-Host "    2. sm-welcome     —  download, SHA256-check, and cosign-"
 Write-Host "                         verify sm-welcome.exe, then install."
 Write-Host "    3. Launch         —  open sm-welcome in a new pwsh 7 console."
 Write-Host ""
@@ -62,42 +69,178 @@ function Confirm-Section($title, $lines) {
     }
 }
 
+# Canonical install root for all four tools. Single PATH entry suffices
+# for gh and cosign (top-level .exe); pwsh and git live in subdirs and
+# get their own PATH entries appended in the same session below.
+$LocalBin = Join-Path $HOME '.local\bin'
+$LocalPwshDir = Join-Path $LocalBin 'pwsh-7'
+$LocalGitDir = Join-Path $LocalBin 'git'
+
+# Per-SimpleMotion TUF root for cosign so we don't clobber any existing
+# public-good Sigstore trust the user may have under ~/.sigstore.
+# Exported so sm-install.ps1 (Section 2) picks up the same value.
+$env:TUF_ROOT = Join-Path $HOME '.simplemotion\sigstore'
+
+# Host arch — used by every Install-* helper.
+$archSuffix = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+$archSuffixCosign = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
+
+# ── Discovery helpers ──────────────────────────────────────────────
+# Each Find-* returns a path string, or $null if the tool isn't on disk
+# in either PATH or the ~/.local/bin location we install to.
 function Find-Pwsh7 {
     $cmd = Get-Command pwsh -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
     $candidates = @(
+        (Join-Path $LocalPwshDir 'pwsh.exe'),
         (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'),
         (Join-Path ${env:ProgramFiles(x86)} 'PowerShell\7\pwsh.exe'),
         (Join-Path $HOME 'AppData\Local\Microsoft\PowerShell\7\pwsh.exe')
     )
-    foreach ($p in $candidates) {
-        if ($p -and (Test-Path $p)) { return $p }
-    }
+    foreach ($p in $candidates) { if ($p -and (Test-Path $p)) { return $p } }
     return $null
 }
-
-# Cosign isn't always on PATH in the session it was just winget-installed
-# into (PATH refresh requires a new shell), so we also check winget's
-# user-scope Links dir directly. sm-install.ps1 uses the same resolver.
+function Find-Git {
+    $cmd = Get-Command git -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    $candidates = @(
+        (Join-Path $LocalGitDir 'cmd\git.exe'),
+        (Join-Path $env:ProgramFiles 'Git\cmd\git.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Git\cmd\git.exe')
+    )
+    foreach ($p in $candidates) { if ($p -and (Test-Path $p)) { return $p } }
+    return $null
+}
 function Find-Cosign {
     $cmd = Get-Command cosign -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\cosign.exe'),
-        (Join-Path $env:ProgramFiles 'WinGet\Links\cosign.exe')
-    )
-    foreach ($p in $candidates) {
-        if ($p -and (Test-Path $p)) { return $p }
-    }
-    $pkgsRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
-    if (Test-Path $pkgsRoot) {
-        $cosignDir = Get-ChildItem $pkgsRoot -Directory -Filter 'sigstore.cosign*' -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($cosignDir) {
-            $exe = Get-ChildItem $cosignDir.FullName -Filter 'cosign*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($exe) { return $exe.FullName }
-        }
-    }
+    $local = Join-Path $LocalBin 'cosign.exe'
+    if (Test-Path $local) { return $local }
     return $null
+}
+
+# ── Install helpers ────────────────────────────────────────────────
+# Each Install-* fetches the project's /releases/latest metadata via the
+# GitHub API to get tag + asset list + SHA256 digest in one call, then
+# downloads the matching asset, SHA256-verifies, and unpacks to its
+# install location. Returns the path to the installed binary on success
+# or $null on failure (caller decides whether the missing tool is fatal).
+function Get-LatestRelease($repo) {
+    try {
+        return Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing
+    } catch {
+        Write-Host ("  [!] release lookup failed for {0}: {1}" -f $repo, $_.Exception.Message) -ForegroundColor Yellow
+        return $null
+    }
+}
+function Confirm-AssetDigest($file, $asset) {
+    $expected = ($asset.digest -replace '^sha256:', '').ToLower()
+    if (-not $expected) { return $false }
+    $actual = (Get-FileHash -Path $file -Algorithm SHA256).Hash.ToLower()
+    return ($expected -eq $actual)
+}
+
+function Install-PwshPortable {
+    $rel = Get-LatestRelease 'PowerShell/PowerShell'
+    if (-not $rel) { return $null }
+    $version = $rel.tag_name.TrimStart('v')
+    $assetName = "PowerShell-$version-win-$archSuffix.zip"
+    $asset = $rel.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
+    if (-not $asset) { Write-Host "  [!] PowerShell asset $assetName not in release" -ForegroundColor Yellow; return $null }
+    $tmp = Join-Path $env:TEMP ("pwsh-{0}.zip" -f ([Guid]::NewGuid().ToString('N')))
+    try {
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tmp -UseBasicParsing -ErrorAction Stop
+        if (-not (Confirm-AssetDigest $tmp $asset)) {
+            Remove-Item $tmp -ErrorAction SilentlyContinue
+            Write-Host "  [!] PowerShell SHA256 mismatch" -ForegroundColor Yellow; return $null
+        }
+        if (Test-Path $LocalPwshDir) { Remove-Item $LocalPwshDir -Recurse -Force }
+        New-Item -ItemType Directory -Path $LocalPwshDir -Force | Out-Null
+        Expand-Archive -Path $tmp -DestinationPath $LocalPwshDir -Force
+    } finally {
+        Remove-Item $tmp -ErrorAction SilentlyContinue
+    }
+    $exe = Join-Path $LocalPwshDir 'pwsh.exe'
+    if (Test-Path $exe) { return $exe }
+    return $null
+}
+function Install-GitPortable {
+    $rel = Get-LatestRelease 'git-for-windows/git'
+    if (-not $rel) { return $null }
+    # git-for-windows tag is `v2.54.0.windows.1` but the asset filename
+    # only embeds the upstream git version (`2.54.0`). Pull the asset
+    # name out of the release listing directly rather than reconstructing it.
+    $assetPattern = if ($archSuffix -eq 'arm64') { '*-arm64.7z.exe' } else { '*-64-bit.7z.exe' }
+    $asset = $rel.assets | Where-Object { $_.name -like ('PortableGit-' + $assetPattern) } | Select-Object -First 1
+    if (-not $asset) { Write-Host ("  [!] PortableGit asset matching {0} not in release" -f $assetPattern) -ForegroundColor Yellow; return $null }
+    $tmp = Join-Path $env:TEMP ("portablegit-{0}.7z.exe" -f ([Guid]::NewGuid().ToString('N')))
+    try {
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tmp -UseBasicParsing -ErrorAction Stop
+        if (-not (Confirm-AssetDigest $tmp $asset)) {
+            Remove-Item $tmp -ErrorAction SilentlyContinue
+            Write-Host "  [!] Git SHA256 mismatch" -ForegroundColor Yellow; return $null
+        }
+        if (Test-Path $LocalGitDir) { Remove-Item $LocalGitDir -Recurse -Force }
+        New-Item -ItemType Directory -Path $LocalGitDir -Force | Out-Null
+        # PortableGit-*.7z.exe is a 7z self-extractor. `-o<dir>` sets the
+        # output dir, `-y` suppresses prompts. Wait for completion before
+        # checking; the SFX runs detached otherwise.
+        $proc = Start-Process -FilePath $tmp -ArgumentList @("-o`"$LocalGitDir`"", '-y') -Wait -PassThru -NoNewWindow
+        if ($proc.ExitCode -ne 0) {
+            Write-Host ("  [!] PortableGit extractor exited {0}" -f $proc.ExitCode) -ForegroundColor Yellow
+            return $null
+        }
+    } finally {
+        Remove-Item $tmp -ErrorAction SilentlyContinue
+    }
+    $exe = Join-Path $LocalGitDir 'cmd\git.exe'
+    if (Test-Path $exe) { return $exe }
+    return $null
+}
+function Install-Cosign {
+    $rel = Get-LatestRelease 'sigstore/cosign'
+    if (-not $rel) { return $null }
+    $assetName = "cosign-windows-$archSuffixCosign.exe"
+    $asset = $rel.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
+    if (-not $asset) { Write-Host "  [!] cosign asset $assetName not in release" -ForegroundColor Yellow; return $null }
+    $tmp = Join-Path $env:TEMP ("cosign-{0}.exe" -f ([Guid]::NewGuid().ToString('N')))
+    try {
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tmp -UseBasicParsing -ErrorAction Stop
+        if (-not (Confirm-AssetDigest $tmp $asset)) {
+            Remove-Item $tmp -ErrorAction SilentlyContinue
+            Write-Host "  [!] cosign SHA256 mismatch" -ForegroundColor Yellow; return $null
+        }
+        if (-not (Test-Path $LocalBin)) { New-Item -ItemType Directory -Path $LocalBin -Force | Out-Null }
+        Move-Item -Path $tmp -Destination (Join-Path $LocalBin 'cosign.exe') -Force
+    } catch {
+        Remove-Item $tmp -ErrorAction SilentlyContinue
+        Write-Host ("  [!] cosign install failed: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        return $null
+    }
+    $exe = Join-Path $LocalBin 'cosign.exe'
+    if (Test-Path $exe) { return $exe }
+    return $null
+}
+
+# Point cosign at GitHub's Sigstore TUF repo so it can verify GitHub-issued
+# attestations natively. Cosign walks the TUF chain from the bootstrap
+# 1.root.json, fetches the current trusted_root.json (containing GitHub's
+# Fulcio CA + TSA pubkeys), and caches everything under $env:TUF_ROOT.
+# Idempotent: re-running just refreshes the cache.
+function Initialize-CosignTuf($cosignExe) {
+    if (-not $cosignExe) { return $false }
+    if (-not (Test-Path $env:TUF_ROOT)) { New-Item -ItemType Directory -Path $env:TUF_ROOT -Force | Out-Null }
+    $tmpRoot = Join-Path $env:TEMP ("gh-1.root-{0}.json" -f ([Guid]::NewGuid().ToString('N')))
+    try {
+        Invoke-WebRequest -Uri 'https://tuf-repo.github.com/1.root.json' -OutFile $tmpRoot -UseBasicParsing -ErrorAction Stop
+        & $cosignExe initialize --mirror 'https://tuf-repo.github.com' --root $tmpRoot *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        Write-Host ("  [!] cosign TUF init failed: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        return $false
+    } finally {
+        Remove-Item $tmpRoot -ErrorAction SilentlyContinue
+    }
 }
 
 # sm-welcome's step-counter UI accounts for the bootstrap's pre-binary
@@ -115,65 +258,61 @@ $localBin   = Join-Path $installDir 'sm-welcome.exe'
 
 # ── Section 1: Prerequisites ──────────────────────────────────────────
 $pwshPath   = Find-Pwsh7
-$gitCmd     = Get-Command git -ErrorAction SilentlyContinue
+$gitPath    = Find-Git
 $cosignPath = Find-Cosign
-$needPwsh   = -not $pwshPath
-$needGit    = -not $gitCmd
-$needCosign = -not $cosignPath
 
 $prereqLines = @(
-    "Installs or verifies the three tools required for a secure bootstrap:",
+    "Installs three tools required for a secure bootstrap. Each is fetched",
+    "from its project's GitHub release, SHA256-verified against the digest",
+    "the GitHub API publishes alongside the asset, and unpacked under",
+    "~/.local/bin (no admin rights, no winget, no MSI).",
     "",
-    "  PowerShell 7  (winget Microsoft.PowerShell)  modern shell host",
-    "  Git           (winget Git.Git)               clones the employee repo",
-    "  cosign        (winget sigstore.cosign)       verifies sm-welcome's",
-    "                                               sigstore build-provenance",
+    "  PowerShell 7  -> ~/.local/bin/pwsh-7/pwsh.exe       (portable zip)",
+    "  Git           -> ~/.local/bin/git/cmd/git.exe       (PortableGit 7z)",
+    "  cosign        -> ~/.local/bin/cosign.exe            (single binary)",
     "",
-    "All installs run silently with --accept-source-agreements and",
-    "--accept-package-agreements. Already-installed packages are skipped.",
-    "",
-    "cosign is the sole attestation verifier in Section 2 — if it doesn't",
-    "install successfully, the provenance check is skipped (SHA256 still",
-    "anchors integrity). Before sm-welcome.exe is installed or invoked, we",
-    "verify it was built by SimpleMotion's CI in 3400-0009-SM-Welcome.",
+    "After cosign is on disk we run `cosign initialize` against GitHub's",
+    "Sigstore TUF repo (tuf-repo.github.com) so cosign can verify GitHub-",
+    "issued attestations natively in Section 2 — no gh anywhere in the",
+    "chain. The TUF cache lands in ~/.simplemotion/sigstore.",
     "",
     "Detected state:",
-    ("  PowerShell 7: {0}" -f $(if ($needPwsh)   { 'missing — will install' } else { "present ($pwshPath)" })),
-    ("  Git:          {0}" -f $(if ($needGit)    { 'missing — will install' } else { "present ($($gitCmd.Source))" })),
-    ("  cosign:       {0}" -f $(if ($needCosign) { 'missing — will install' } else { "present ($cosignPath)" }))
+    ("  PowerShell 7: {0}" -f $(if (-not $pwshPath)   { 'missing — will install' } else { "present ($pwshPath)" })),
+    ("  Git:          {0}" -f $(if (-not $gitPath)    { 'missing — will install' } else { "present ($gitPath)" })),
+    ("  cosign:       {0}" -f $(if (-not $cosignPath) { 'missing — will install' } else { "present ($cosignPath)" }))
 )
 Confirm-Section 'Section 1 of 3: Prerequisites' $prereqLines
 
-if ($needPwsh) {
-    Write-Host "  [*] Installing PowerShell 7..." -ForegroundColor DarkGray
-    winget install --id Microsoft.PowerShell --source winget --silent --accept-source-agreements --accept-package-agreements | Out-Null
-    $pwshPath = Find-Pwsh7
-    if ($pwshPath) {
-        Write-Host ("  [v] PowerShell 7 installed: {0}" -f $pwshPath) -ForegroundColor Green
-    } else {
-        Write-Host "  [!] pwsh.exe not found after winget install — will fall back to current shell" -ForegroundColor Yellow
-    }
+if (-not $pwshPath) {
+    Write-Host "  [*] Installing PowerShell 7 (portable)..." -ForegroundColor DarkGray
+    $pwshPath = Install-PwshPortable
+    if ($pwshPath) { Write-Host ("  [v] PowerShell 7 installed: {0}" -f $pwshPath) -ForegroundColor Green }
 }
-if ($needGit) {
-    Write-Host "  [*] Installing Git..." -ForegroundColor DarkGray
-    winget install --id Git.Git --source winget --silent --accept-source-agreements --accept-package-agreements | Out-Null
-    $gitCmd = Get-Command git -ErrorAction SilentlyContinue
-    if ($gitCmd) {
-        Write-Host ("  [v] Git installed: {0}" -f $gitCmd.Source) -ForegroundColor Green
-    } else {
-        Write-Host "  [!] git not on PATH after winget install — sm-welcome will report this" -ForegroundColor Yellow
-    }
+if (-not $gitPath) {
+    Write-Host "  [*] Installing Git (PortableGit)..." -ForegroundColor DarkGray
+    $gitPath = Install-GitPortable
+    if ($gitPath) { Write-Host ("  [v] Git installed: {0}" -f $gitPath) -ForegroundColor Green }
 }
-if ($needCosign) {
+if (-not $cosignPath) {
     Write-Host "  [*] Installing cosign..." -ForegroundColor DarkGray
-    winget install --id sigstore.cosign --source winget --silent --accept-source-agreements --accept-package-agreements | Out-Null
-    $cosignPath = Find-Cosign
-    if ($cosignPath) {
-        Write-Host ("  [v] cosign installed: {0}" -f $cosignPath) -ForegroundColor Green
+    $cosignPath = Install-Cosign
+    if ($cosignPath) { Write-Host ("  [v] cosign installed: {0}" -f $cosignPath) -ForegroundColor Green }
+}
+
+# Initialize cosign's TUF trust against GitHub's Sigstore. Runs even if
+# cosign was already on disk so re-bootstraps refresh the cache.
+if ($cosignPath) {
+    Write-Host "  [*] Initializing cosign TUF trust (tuf-repo.github.com)..." -ForegroundColor DarkGray
+    if (Initialize-CosignTuf $cosignPath) {
+        Write-Host ("  [v] cosign TUF initialized in {0}" -f $env:TUF_ROOT) -ForegroundColor Green
     } else {
-        Write-Host "  [!] cosign install failed — Section 2 will skip attestation verification (SHA256 still anchors integrity)" -ForegroundColor Yellow
+        Write-Host "  [!] cosign TUF init failed — Section 2 will skip attestation verification" -ForegroundColor Yellow
     }
 }
+
+# Extend the current session's PATH so Section 2's calls to cosign / git
+# find the just-installed binaries without a new shell.
+$env:PATH = "$LocalBin;$LocalPwshDir;$(Join-Path $LocalGitDir 'cmd');$env:PATH"
 
 # ── Section 2: sm-welcome ─────────────────────────────────────────────
 # Fast-path resolution: if the binary is already on disk, ask the channel
@@ -217,8 +356,9 @@ $smLines = @(
     "       <asset>.sha256             content checksum",
     "       <asset>.sigstore.jsonl     sigstore build-provenance bundle",
     "  2. Hash the binary; compare against the .sha256 file.",
-    "  3. Verify the sigstore bundle with cosign — check the bundle's cert",
-    "     identity matches the 3400-0009-SM-Welcome source repo.",
+    "  3. Verify the sigstore bundle with cosign against GitHub's Sigstore",
+    "     TUF (set up in Section 1) — checks the bundle's cert identity",
+    "     matches the 3400-0009-SM-Welcome source repo.",
     "  4. Move the verified binary to $installDir.",
     "",
     "The binary is never installed or invoked until all checks pass."

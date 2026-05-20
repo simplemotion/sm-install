@@ -2,9 +2,10 @@
 # SimpleMotion generic binary installer base (macOS + Linux).
 #
 # Resolves a SimpleMotion-published binary from a GitHub Releases-hosting
-# repo, verifies SHA256 (plus sigstore attestation via cosign when cosign
-# is present on disk), and either installs it to a PATH directory or
-# execs it from a temp file.
+# repo, verifies SHA256 + sigstore attestation via cosign (installed to
+# ~/.local/bin by sm-welcome.sh's Section 1, with GitHub's Sigstore TUF
+# root initialized in $TUF_ROOT), and either installs it to a PATH
+# directory or execs it from a temp file.
 #
 # Usage (typically called by a thin per-product wrapper):
 #   sm-install.sh --package NAME [options] [-- ARGS...]
@@ -255,11 +256,10 @@ if [[ "$expected" != "$actual" ]]; then
 fi
 printf '  [%s✓%s] %s Checksum verified %s(SHA256: %s)%s\n' "$GREEN" "$RESET" "$(fmt_step 3)" "$DIM" "$actual" "$RESET"
 
-# Locate cosign without bootstrapping. sm-welcome.sh's Section 1 handles
-# the install (direct sigstore/cosign /releases/latest/download/ + SHA256
-# verify into ~/.local/bin/cosign); we just look in the same spot here so
-# sm-install.sh can also use cosign when called standalone after sm-welcome
-# has provisioned it.
+# Locate cosign. sm-welcome.sh's Section 1 installs it to ~/.local/bin
+# via curl and runs `cosign initialize` against GitHub's TUF repo
+# (TUF_ROOT=~/.simplemotion/sigstore) so this script can verify
+# GitHub-issued attestations cosign-natively, no gh required.
 find_cosign() {
     COSIGN_BIN=""
     if command -v cosign >/dev/null 2>&1; then
@@ -271,20 +271,29 @@ find_cosign() {
     return 1
 }
 
-# Attestation check — cosign-only. sm-welcome.sh's Section 1 installs
-# cosign; without it we skip provenance verification entirely (SHA256
-# above still anchors integrity). Bundle present + cosign present +
-# verification fails is fatal.
+# Default TUF_ROOT if Section 1 hasn't been through (e.g., sm-install.sh
+# invoked standalone). Without an initialized TUF cache cosign falls back
+# to the public-good Sigstore and rejects GitHub-issued leaf certs —
+# caller can spot that in the error.
+: "${TUF_ROOT:=$HOME/.simplemotion/sigstore}"
+export TUF_ROOT
+
+# Attestation check — cosign-only. Verification of GitHub-issued
+# attestations needs cosign pointed at GitHub's private Sigstore TUF
+# plus the GH-Sigstore-shaped flag set: TSA timestamps instead of Rekor
+# inclusion proofs, no SCTs on the leaf cert, SLSA-v1 predicate type.
+# Bundle present + cosign rejects is fatal. Bundle present + cosign
+# missing skips (SHA256 above still anchors integrity).
 find_cosign || true
 if curl -fsSL "${URL}.sigstore.jsonl" -o "$TMPATT" 2>/dev/null && [[ -n "$COSIGN_BIN" ]]; then
-    # GitHub's OIDC subject embeds the source repo's workflow path. We
-    # match any workflow under the source repo with the standard GH
-    # Actions OIDC issuer. If the publish workflow ever moves outside
-    # `.github/workflows/`, update this regex.
     cert_id_regex="https://github.com/${SOURCE_REPO}/\.github/workflows/.*"
     if "$COSIGN_BIN" verify-blob-attestation \
         --bundle "$TMPATT" \
         --new-bundle-format \
+        --use-signed-timestamps \
+        --insecure-ignore-tlog \
+        --insecure-ignore-sct \
+        --type slsaprovenance1 \
         --certificate-identity-regexp "$cert_id_regex" \
         --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
         "$TMPBIN" >/dev/null 2>&1; then
