@@ -81,9 +81,12 @@ $LocalGitDir = Join-Path $LocalBin 'git'
 # Exported so sm-install.ps1 (Section 2) picks up the same value.
 $env:TUF_ROOT = Join-Path $HOME '.simplemotion\sigstore'
 
-# Host arch — used by every Install-* helper.
+# Host arch — used by every Install-* helper. cosign doesn't ship a
+# Windows-arm64 build (only `cosign-windows-amd64.exe`), so we always
+# pull the amd64 binary on Windows; Windows-on-ARM emulates x64 fine
+# for a one-shot verify call. pwsh and Git both have native arm64.
 $archSuffix = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
-$archSuffixCosign = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
+$archSuffixCosign = 'amd64'
 
 # ── Discovery helpers ──────────────────────────────────────────────
 # Each Find-* returns a path string, or $null if the tool isn't on disk
