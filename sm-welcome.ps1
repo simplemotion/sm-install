@@ -180,7 +180,13 @@ if ($env:SM_WELCOME_CLEAN) {
     foreach ($d in @((Join-Path $HOME '.local'), (Join-Path $HOME '.simplemotion'))) {
         if (Test-Path $d) {
             Remove-TreeForcefully $d
-            Write-Host ("      removed {0}" -f $d) -ForegroundColor DarkGray
+            if (Test-Path $d) {
+                # Partial removal — typically because pwsh.exe / git.exe
+                # from a still-running window has an open file handle.
+                Write-Host ("      [!] partial: {0} still has files (likely a process held a lock)" -f $d) -ForegroundColor Yellow
+            } else {
+                Write-Host ("      removed {0}" -f $d) -ForegroundColor DarkGray
+            }
         }
     }
     $stateFile = Join-Path $HOME '.sm-welcome.toml'
@@ -197,17 +203,23 @@ $cosignPath = Find-Cosign
 
 Confirm-Section 'Section 1 of 3: Prerequisites'
 
-if (-not $pwshPath) {
+# SM_WELCOME_CLEAN forces a re-install regardless of detect. The wipe
+# above can leave stale files behind if pwsh.exe / git.exe from a still-
+# running console held a lock, and we don't want detection to mistake
+# those leftovers for a valid install. Install-* helpers do their own
+# Remove-TreeForcefully before extracting, so re-running is safe.
+$forceInstall = [bool]$env:SM_WELCOME_CLEAN
+if ($forceInstall -or -not $pwshPath) {
     Write-Host "  [*] Installing PowerShell 7 (portable)..." -ForegroundColor DarkGray
     $pwshPath = Install-PwshPortable
     if ($pwshPath) { Write-Host ("  [v] PowerShell 7 installed: {0}" -f $pwshPath) -ForegroundColor Green }
 }
-if (-not $gitPath) {
+if ($forceInstall -or -not $gitPath) {
     Write-Host "  [*] Installing Git (PortableGit)..." -ForegroundColor DarkGray
     $gitPath = Install-GitPortable
     if ($gitPath) { Write-Host ("  [v] Git installed: {0}" -f $gitPath) -ForegroundColor Green }
 }
-if (-not $cosignPath) {
+if ($forceInstall -or -not $cosignPath) {
     Write-Host "  [*] Installing cosign..." -ForegroundColor DarkGray
     $cosignPath = Install-Cosign
     if ($cosignPath) { Write-Host ("  [v] cosign installed: {0}" -f $cosignPath) -ForegroundColor Green }
