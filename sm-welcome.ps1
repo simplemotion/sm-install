@@ -89,36 +89,24 @@ $archSuffix = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x
 $archSuffixCosign = 'amd64'
 
 # ── Discovery helpers ──────────────────────────────────────────────
-# Each Find-* returns a path string, or $null if the tool isn't on disk
-# in either PATH or the ~/.local/bin location we install to.
+# Deliberately check ~/.local/bin ONLY — system-wide pwsh / git / cosign
+# installs are ignored. The SimpleMotion onboarding wants a controlled,
+# per-user toolchain so version drift across machines stays bounded;
+# Section 1 always provisions to ~/.local/bin even when the tools are
+# already present in Program Files or on PATH.
 function Find-Pwsh7 {
-    $cmd = Get-Command pwsh -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-    $candidates = @(
-        (Join-Path $LocalPwshDir 'pwsh.exe'),
-        (Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'),
-        (Join-Path ${env:ProgramFiles(x86)} 'PowerShell\7\pwsh.exe'),
-        (Join-Path $HOME 'AppData\Local\Microsoft\PowerShell\7\pwsh.exe')
-    )
-    foreach ($p in $candidates) { if ($p -and (Test-Path $p)) { return $p } }
+    $p = Join-Path $LocalPwshDir 'pwsh.exe'
+    if (Test-Path $p) { return $p }
     return $null
 }
 function Find-Git {
-    $cmd = Get-Command git -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-    $candidates = @(
-        (Join-Path $LocalGitDir 'cmd\git.exe'),
-        (Join-Path $env:ProgramFiles 'Git\cmd\git.exe'),
-        (Join-Path ${env:ProgramFiles(x86)} 'Git\cmd\git.exe')
-    )
-    foreach ($p in $candidates) { if ($p -and (Test-Path $p)) { return $p } }
+    $p = Join-Path $LocalGitDir 'cmd\git.exe'
+    if (Test-Path $p) { return $p }
     return $null
 }
 function Find-Cosign {
-    $cmd = Get-Command cosign -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-    $local = Join-Path $LocalBin 'cosign.exe'
-    if (Test-Path $local) { return $local }
+    $p = Join-Path $LocalBin 'cosign.exe'
+    if (Test-Path $p) { return $p }
     return $null
 }
 
@@ -265,21 +253,26 @@ $gitPath    = Find-Git
 $cosignPath = Find-Cosign
 
 $prereqLines = @(
-    "Installs three tools required for a secure bootstrap. Each is fetched",
-    "from its project's GitHub release, SHA256-verified against the digest",
-    "the GitHub API publishes alongside the asset, and unpacked under",
-    "~/.local/bin (no admin rights, no winget, no MSI).",
+    "Installs three tools to ~/.local/bin so the SimpleMotion toolchain",
+    "is 100% local and per-user. System-wide installs of PowerShell, Git,",
+    "or cosign are deliberately ignored — only the copies we provision",
+    "under ~/.local/bin are used for the rest of onboarding (and by",
+    "sm-welcome.exe going forward).",
+    "",
+    "Each is fetched from its project's GitHub release, SHA256-verified",
+    "against the digest the GitHub API publishes alongside the asset, and",
+    "unpacked into ~/.local/bin (no admin rights, no winget, no MSI).",
     "",
     "  PowerShell 7  -> ~/.local/bin/pwsh-7/pwsh.exe       (portable zip)",
     "  Git           -> ~/.local/bin/git/cmd/git.exe       (PortableGit 7z)",
     "  cosign        -> ~/.local/bin/cosign.exe            (single binary)",
     "",
-    "After cosign is on disk we run `cosign initialize` against GitHub's",
+    "After cosign lands, we run `cosign initialize` against GitHub's",
     "Sigstore TUF repo (tuf-repo.github.com) so cosign can verify GitHub-",
-    "issued attestations natively in Section 2 — no gh anywhere in the",
-    "chain. The TUF cache lands in ~/.simplemotion/sigstore.",
+    "issued attestations natively in Section 2. The TUF cache lands in",
+    "~/.simplemotion/sigstore.",
     "",
-    "Detected state:",
+    "Detected at ~/.local/bin:",
     ("  PowerShell 7: {0}" -f $(if (-not $pwshPath)   { 'missing — will install' } else { "present ($pwshPath)" })),
     ("  Git:          {0}" -f $(if (-not $gitPath)    { 'missing — will install' } else { "present ($gitPath)" })),
     ("  cosign:       {0}" -f $(if (-not $cosignPath) { 'missing — will install' } else { "present ($cosignPath)" }))

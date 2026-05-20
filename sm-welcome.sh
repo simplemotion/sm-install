@@ -129,9 +129,6 @@ LOCAL_BIN="${INSTALL_DIR}/sm-welcome"
 # keep current), SHA256-verifies, and chmods. Sets COSIGN_BIN on success.
 ensure_cosign() {
     COSIGN_BIN=""
-    if command -v cosign >/dev/null 2>&1; then
-        COSIGN_BIN=$(command -v cosign); return 0
-    fi
     local cosign_dir="$HOME/.local/bin"
     local local_cosign="${cosign_dir}/cosign"
     if [[ -x "$local_cosign" ]]; then
@@ -223,19 +220,20 @@ detect_state() {
 GIT_STATE=$(detect_state git)
 CURL_STATE=$(detect_state curl)
 BASH_STATE=$(detect_state bash)
-# cosign may live in ~/.local/bin from a prior run; detect_state only
-# walks PATH, so also probe that fallback.
-if command -v cosign >/dev/null 2>&1; then
-    COSIGN_STATE="present ($(command -v cosign))"
-elif [[ -x "$HOME/.local/bin/cosign" ]]; then
+# cosign is a SimpleMotion-managed tool — we deliberately ignore any
+# system-wide cosign (Homebrew / apt / dnf) and use only the one we
+# install ourselves at ~/.local/bin/cosign.
+if [[ -x "$HOME/.local/bin/cosign" ]]; then
     COSIGN_STATE="present ($HOME/.local/bin/cosign)"
 else
     COSIGN_STATE="missing"
 fi
 
 PREREQ_LINES=(
-    "Verifies the shell environment is ready and bootstraps cosign for"
-    "Section 2's attestation check:"
+    "Checks the shell environment and bootstraps cosign as a 100% local"
+    "(per-user) install under ~/.local/bin. Any system-wide cosign from"
+    "Homebrew / apt / dnf is deliberately ignored — only the copy we"
+    "provision here is used by Section 2 and by sm-welcome going forward."
     ""
     "  git     clones the employee repo and most sm-welcome submodule work"
     "          (flagged if missing; not auto-installed — needs sudo / Xcode CLT)"
@@ -273,10 +271,7 @@ if [[ "$COSIGN_STATE" == "missing" ]]; then
         printf '  [!] cosign install failed — Section 2 will skip attestation verification (SHA256 still anchors integrity).\n'
     fi
 else
-    # Resolve $COSIGN_BIN for the TUF init step below.
-    if command -v cosign >/dev/null 2>&1; then COSIGN_BIN=$(command -v cosign)
-    elif [[ -x "$HOME/.local/bin/cosign" ]]; then COSIGN_BIN="$HOME/.local/bin/cosign"
-    fi
+    COSIGN_BIN="$HOME/.local/bin/cosign"
 fi
 if [[ -n "${COSIGN_BIN:-}" ]]; then
     printf '  [*] Initializing cosign TUF trust (tuf-repo.github.com)...\n'

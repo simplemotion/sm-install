@@ -256,15 +256,11 @@ if [[ "$expected" != "$actual" ]]; then
 fi
 printf '  [%s✓%s] %s Checksum verified %s(SHA256: %s)%s\n' "$GREEN" "$RESET" "$(fmt_step 3)" "$DIM" "$actual" "$RESET"
 
-# Locate cosign. sm-welcome.sh's Section 1 installs it to ~/.local/bin
-# via curl and runs `cosign initialize` against GitHub's TUF repo
-# (TUF_ROOT=~/.simplemotion/sigstore) so this script can verify
-# GitHub-issued attestations cosign-natively, no gh required.
+# Locate cosign. sm-welcome.sh's Section 1 always installs cosign to
+# ~/.local/bin/cosign (100% local toolchain — any system-wide cosign
+# from Homebrew / apt / dnf is ignored). We only probe that one path.
 find_cosign() {
     COSIGN_BIN=""
-    if command -v cosign >/dev/null 2>&1; then
-        COSIGN_BIN=$(command -v cosign); return 0
-    fi
     if [[ -x "$HOME/.local/bin/cosign" ]]; then
         COSIGN_BIN="$HOME/.local/bin/cosign"; return 0
     fi

@@ -159,13 +159,11 @@ if ($expected -ne $actual) {
 }
 Write-Host ("  [v] {0} Checksum verified (SHA256: {1})" -f (Format-Step 3), $actual) -ForegroundColor Green
 
-# Locate cosign. sm-welcome.ps1's Section 1 installs it to ~/.local/bin
-# via curl and also runs `cosign initialize` against GitHub's TUF repo
-# (~/.simplemotion/sigstore as TUF_ROOT) so this script can verify
-# GitHub-issued attestations cosign-natively, no gh required.
+# Locate cosign. sm-welcome.ps1's Section 1 always installs cosign to
+# ~/.local/bin/cosign.exe (100% local toolchain — any system-wide cosign
+# is ignored). We only probe that one path so this script picks up
+# exactly the binary Section 1 provisioned.
 function Find-Cosign {
-    $cmd = Get-Command cosign -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
     $local = Join-Path $HOME '.local\bin\cosign.exe'
     if (Test-Path $local) { return $local }
     return $null
