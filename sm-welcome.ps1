@@ -31,6 +31,12 @@
 #
 # Non-interactive override: set $env:SM_WELCOME_ASSUME_YES=1 to auto-accept
 # every section prompt (used by CI / unattended re-runs).
+#
+# Section 3 launches sm-welcome.exe in an *elevated* pwsh 7 console by
+# default so the binary's step 00-preflight can write LongPathsEnabled
+# under HKLM and add the SimpleMotion tree to Defender exclusions. UAC
+# prompts once. Set $env:SM_WELCOME_NO_ELEVATE=1 to opt out (preflight
+# will then print the manual commands to run later as admin).
 
 $ErrorActionPreference = 'Stop'
 
@@ -272,7 +278,49 @@ if (-not $skipDownload) {
 Confirm-Section 'Section 3 of 3: Launch'
 
 if ($pwshPath) {
-    Start-Process $pwshPath -ArgumentList @('-NoExit', '-Command', "& '$localBin'")
+    # Build a -Command string that re-exports the SimpleMotion env vars in
+    # the child shell and then execs the binary. We forward them this way
+    # rather than relying on inheritance because Start-Process -Verb RunAs
+    # crosses a UAC elevation boundary (ShellExecute / COM elevation host)
+    # where env propagation isn't guaranteed.
+    $envForward = @(
+        'SM_EMAIL', 'SM_CHANNEL', 'SM_INSTALL_DIR', 'TUF_ROOT',
+        'SM_WELCOME_NO_BANNER', 'SM_WELCOME_STEPS_OFFSET', 'SM_WELCOME_STEPS_TOTAL',
+        'SM_WELCOME_ASSUME_YES', 'SM_WELCOME_CLEAN', 'SM_WELCOME_SKIP_FAST_PATH'
+    )
+    $envPrefix = @()
+    foreach ($name in $envForward) {
+        $val = [Environment]::GetEnvironmentVariable($name)
+        if ($val) {
+            $escaped = $val.Replace("'", "''")
+            $envPrefix += "`$env:${name}='${escaped}'"
+        }
+    }
+    $cmd = ($envPrefix -join '; ')
+    if ($cmd) { $cmd += '; ' }
+    $cmd += "& '$localBin'"
+
+    # Elevate by default so step 00-preflight can write LongPathsEnabled
+    # under HKLM\...\FileSystem and add the Defender exclusion. Set
+    # $env:SM_WELCOME_NO_ELEVATE=1 to skip elevation (the preflight will
+    # then warn and continue, surfacing the manual reg/MpPreference
+    # commands the user can run later).
+    $startArgs = @{
+        FilePath         = $pwshPath
+        ArgumentList     = @('-NoExit', '-Command', $cmd)
+        WorkingDirectory = $HOME
+    }
+    if (-not $env:SM_WELCOME_NO_ELEVATE) {
+        try {
+            Start-Process @startArgs -Verb RunAs -ErrorAction Stop
+            Write-Host "  [v] Launched sm-welcome in an elevated PowerShell 7 console" -ForegroundColor Green
+        } catch {
+            Write-Host "  [!] UAC declined — launching without admin (preflight will warn about LongPaths/Defender)" -ForegroundColor Yellow
+            Start-Process @startArgs
+        }
+    } else {
+        Start-Process @startArgs
+    }
 } else {
     & $localBin
 }
