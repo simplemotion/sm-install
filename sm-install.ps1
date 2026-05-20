@@ -1,9 +1,10 @@
 # SimpleMotion generic binary installer base (Windows).
 #
 # Resolves a SimpleMotion-published binary from a GitHub Releases-hosting
-# repo, verifies SHA256 + sigstore build-provenance attestation via
-# cosign (installed in sm-welcome.ps1's Section 1 via winget), and
-# either installs it to PATH or execs it from a temp file.
+# repo, verifies SHA256 + sigstore build-provenance attestation via cosign
+# (installed to ~/.local/bin by sm-welcome.ps1's Section 1, with GitHub's
+# Sigstore TUF root initialized in $env:TUF_ROOT), and either installs to
+# PATH or execs from a temp file.
 #
 # Usage (typically called by a thin per-product wrapper):
 #   irm "https://install.simplemotion.com/sm-install.ps1" |
@@ -158,34 +159,26 @@ if ($expected -ne $actual) {
 }
 Write-Host ("  [v] {0} Checksum verified (SHA256: {1})" -f (Format-Step 3), $actual) -ForegroundColor Green
 
-# Locate a winget-installed cosign without requiring a fresh-shell PATH
-# refresh. Mirrors sm-welcome.ps1's resolver: checks PATH, then winget's
-# Links shim dir, then the package install directory.
+# Locate cosign. sm-welcome.ps1's Section 1 installs it to ~/.local/bin
+# via curl and also runs `cosign initialize` against GitHub's TUF repo
+# (~/.simplemotion/sigstore as TUF_ROOT) so this script can verify
+# GitHub-issued attestations cosign-natively, no gh required.
 function Find-Cosign {
     $cmd = Get-Command cosign -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\cosign.exe'),
-        (Join-Path $env:ProgramFiles 'WinGet\Links\cosign.exe')
-    )
-    foreach ($p in $candidates) {
-        if ($p -and (Test-Path $p)) { return $p }
-    }
-    $pkgsRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
-    if (Test-Path $pkgsRoot) {
-        $cosignDir = Get-ChildItem $pkgsRoot -Directory -Filter 'sigstore.cosign*' -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($cosignDir) {
-            $exe = Get-ChildItem $cosignDir.FullName -Filter 'cosign*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($exe) { return $exe.FullName }
-        }
-    }
+    $local = Join-Path $HOME '.local\bin\cosign.exe'
+    if (Test-Path $local) { return $local }
     return $null
 }
 
-# Attestation check — cosign-only. sm-welcome.ps1's Section 1 installs
-# cosign via winget; without it, we skip provenance verification entirely
-# (SHA256 above still anchors integrity). Bundle present + cosign present
-# + verification fails is fatal.
+# Attestation check — cosign-only. Verification of GitHub-issued
+# attestations needs cosign pointed at GitHub's private Sigstore TUF
+# (sm-welcome.ps1 ran `cosign initialize --mirror https://tuf-repo.github.com`
+# into $env:TUF_ROOT during Section 1) plus the GH-Sigstore-shaped flag
+# set: TSA timestamps instead of Rekor inclusion proofs, no SCTs on the
+# leaf cert, SLSA-v1 predicate type. Bundle present + cosign rejects is
+# fatal. Bundle present + cosign missing skips (SHA256 above still
+# anchors integrity).
 $bundleUrl = "$url.sigstore.jsonl"
 $tmpAtt = [System.IO.Path]::Combine($env:TEMP, "$Package-$([Guid]::NewGuid().ToString('N')).sigstore.jsonl")
 $bundleOk = $false
@@ -194,16 +187,22 @@ try {
     $bundleOk = $true
 } catch { $bundleOk = $false }
 
+# Default TUF_ROOT if Section 1 hasn't been through (e.g., sm-install.ps1
+# invoked standalone). Will be empty/uninitialized if no init ever ran;
+# cosign will then fall back to the public-good Sigstore and reject the
+# GitHub-issued leaf cert — caller can spot that in the error.
+if (-not $env:TUF_ROOT) { $env:TUF_ROOT = Join-Path $HOME '.simplemotion\sigstore' }
+
 $cosignBin = Find-Cosign
 if ($bundleOk -and $cosignBin) {
-    # GitHub's OIDC subject embeds the source repo's workflow path. We
-    # match any workflow under the source repo with the standard GH
-    # Actions OIDC issuer. If the publish workflow ever moves outside
-    # `.github/workflows/`, update this regex.
     $certIdRegex = "https://github.com/$SourceRepo/\.github/workflows/.*"
     & $cosignBin verify-blob-attestation `
         --bundle $tmpAtt `
         --new-bundle-format `
+        --use-signed-timestamps `
+        --insecure-ignore-tlog `
+        --insecure-ignore-sct `
+        --type slsaprovenance1 `
         --certificate-identity-regexp $certIdRegex `
         --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' `
         $tmpBin *> $null
