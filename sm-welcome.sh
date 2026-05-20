@@ -36,39 +36,18 @@ set -euo pipefail
 # Sigstore trust under ~/.sigstore. Exported so sm-install.sh picks it up.
 export TUF_ROOT="${TUF_ROOT:-$HOME/.simplemotion/sigstore}"
 
-printf '\n  SimpleMotion — Development Environment Onboarding\n  ══════════════════════════════════════════════════\n\n'
-cat <<'EOF'
-  Welcome. This bootstrap runs in three sections, each gated by a
-  Y/n prompt so you can review before anything is changed:
+printf '\n  SimpleMotion — Development Environment Onboarding\n  ══════════════════════════════════════════════════\n'
 
-    1. Prerequisites  —  verifies git, curl, bash, and cosign are
-                         present. No auto-installs on macOS/Linux —
-                         missing tools are flagged so you can install
-                         them before continuing.
-    2. sm-welcome     —  download, SHA256-check, and attestation-verify
-                         sm-welcome, then install.
-    3. Launch         —  exec sm-welcome in this shell.
-
-  We'll start with Section 1 next.
-
-EOF
-
-# Per-section gate. Prints a framed header + description, then blocks on
-# read until the user confirms. Default = Yes (Enter accepts). Any other
-# response aborts the entire bootstrap.
+# Per-section gate. Prints a framed one-line section header, then blocks
+# on read until the user confirms. Default = Yes (Enter accepts). Any
+# other response aborts the entire bootstrap.
 confirm_section() {
     local title="$1"
-    shift
     local pad
     pad=$(( 56 - ${#title} ))
     if (( pad < 0 )); then pad=0; fi
     printf '\n  ── %s ' "$title"
     printf -- '─%.0s' $(seq 1 "$pad")
-    printf '\n\n'
-    while [[ $# -gt 0 ]]; do
-        printf '      %s\n' "$1"
-        shift
-    done
     printf '\n'
     if [[ -n "${SM_WELCOME_ASSUME_YES:-}" ]]; then
         printf '  [+] Proceeding (SM_WELCOME_ASSUME_YES set)\n'
@@ -229,31 +208,7 @@ else
     COSIGN_STATE="missing"
 fi
 
-PREREQ_LINES=(
-    "Checks the shell environment and bootstraps cosign as a 100% local"
-    "(per-user) install under ~/.local/bin. Any system-wide cosign from"
-    "Homebrew / apt / dnf is deliberately ignored — only the copy we"
-    "provision here is used by Section 2 and by sm-welcome going forward."
-    ""
-    "  git     clones the employee repo and most sm-welcome submodule work"
-    "          (flagged if missing; not auto-installed — needs sudo / Xcode CLT)"
-    "  curl    used to fetch everything else; required to continue"
-    "  bash    the script you're reading is bash; sm-welcome assumes 3.2+"
-    "  cosign  fetched from sigstore/cosign's /releases/latest/download/"
-    "          redirect, SHA256-verified against cosign_checksums.txt,"
-    "          installed to ~/.local/bin/cosign (no Homebrew, no sudo)."
-    "          After install we run `cosign initialize --mirror"
-    "          https://tuf-repo.github.com` so cosign can verify GitHub-"
-    "          issued attestations natively (no gh in the chain). The"
-    "          TUF cache lands in ~/.simplemotion/sigstore."
-    ""
-    "Detected state:"
-    "  git:    $GIT_STATE"
-    "  curl:   $CURL_STATE"
-    "  bash:   $BASH_STATE ($BASH_VERSION)"
-    "  cosign: $COSIGN_STATE"
-)
-confirm_section "Section 1 of 3: Prerequisites" "${PREREQ_LINES[@]}"
+confirm_section "Section 1 of 3: Prerequisites"
 
 # Hard-stop only if curl is missing — without it we can't fetch anything.
 if [[ "$CURL_STATE" == "missing" ]]; then
@@ -305,32 +260,7 @@ if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -x "$LOCAL_BIN" ]]; then
     fi
 fi
 
-SM_LINES=(
-    "Downloads and verifies sm-welcome from simplemotion/$CHANNEL_VAL before"
-    "any code from the release channel runs:"
-    ""
-    "  1. Fetch the binary plus two sidecar files:"
-    "       <asset>.sha256             content checksum"
-    "       <asset>.sigstore.jsonl     sigstore build-provenance bundle"
-    "  2. Hash the binary; compare against the .sha256 file."
-    "  3. Verify the sigstore bundle with cosign against GitHub's Sigstore"
-    "     TUF (set up in Section 1) — checks the bundle's cert identity"
-    "     matches the 3400-0009-SM-Welcome source repo."
-    "  4. Move the verified binary to $INSTALL_DIR."
-    ""
-    "The binary is never installed or invoked until all checks pass."
-    ""
-)
-if [[ $SKIP_DOWNLOAD -eq 1 ]]; then
-    SM_LINES+=("Status: fast-path skip — local $LOCAL_VER matches latest on channel=$CHANNEL_VAL.")
-elif [[ -n "$LOCAL_VER" && -n "$LATEST_VER" ]]; then
-    SM_LINES+=("Status: local $LOCAL_VER → installing $LATEST_VER (channel=$CHANNEL_VAL).")
-elif [[ -n "$LATEST_VER" ]]; then
-    SM_LINES+=("Status: installing $LATEST_VER (channel=$CHANNEL_VAL).")
-else
-    SM_LINES+=("Status: installing latest (channel=$CHANNEL_VAL).")
-fi
-confirm_section "Section 2 of 3: sm-welcome" "${SM_LINES[@]}"
+confirm_section "Section 2 of 3: sm-welcome"
 
 if [[ $SKIP_DOWNLOAD -eq 0 ]]; then
     INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")
@@ -343,16 +273,7 @@ if [[ $SKIP_DOWNLOAD -eq 0 ]]; then
 fi
 
 # ── Section 3: Launch ─────────────────────────────────────────────────
-LAUNCH_LINES=(
-    "Execs sm-welcome in this shell. Forwarded args: ${BIN_ARGS[*]:-(none)}"
-    ""
-    "  binary: $LOCAL_BIN"
-    ""
-    "sm-welcome takes over from here — it'll install Claude Code, gh CLI,"
-    "Rust, and clone your employee repository as part of its own onboarding"
-    "steps (each surfaced with its own step counter)."
-)
-confirm_section "Section 3 of 3: Launch" "${LAUNCH_LINES[@]}"
+confirm_section "Section 3 of 3: Launch"
 
 exec_local() {
     if (: </dev/tty) 2>/dev/null; then
