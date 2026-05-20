@@ -30,33 +30,13 @@ $ErrorActionPreference = 'Stop'
 Write-Host ""
 Write-Host "  SimpleMotion — Development Environment Onboarding"
 Write-Host "  ══════════════════════════════════════════════════"
-Write-Host ""
-Write-Host "  Welcome. This bootstrap runs in three sections, each gated by a"
-Write-Host "  Y/n prompt so you can review before anything is changed:"
-Write-Host ""
-Write-Host "    1. Prerequisites  —  installs PowerShell 7, Git, and cosign"
-Write-Host "                         to ~/.local/bin via direct downloads"
-Write-Host "                         from each project's GitHub release"
-Write-Host "                         (SHA256-verified against the API-"
-Write-Host "                         published digests), then initializes"
-Write-Host "                         cosign's TUF trust against GitHub's"
-Write-Host "                         Sigstore. No winget, no MSI, no gh."
-Write-Host "    2. sm-welcome     —  download, SHA256-check, and cosign-"
-Write-Host "                         verify sm-welcome.exe, then install."
-Write-Host "    3. Launch         —  open sm-welcome in a new pwsh 7 console."
-Write-Host ""
-Write-Host "  We'll start with Section 1 next."
-Write-Host ""
 
-# Per-section gate. Prints a framed header + description, then blocks on
-# Read-Host until the user confirms. Default = Yes (Enter accepts). Any
-# other response aborts the entire bootstrap.
-function Confirm-Section($title, $lines) {
+# Per-section gate. Prints a framed one-line section header, then blocks
+# on Read-Host until the user confirms. Default = Yes (Enter accepts).
+# Any other response aborts the entire bootstrap.
+function Confirm-Section($title) {
     Write-Host ""
     Write-Host ("  ── {0} {1}" -f $title, ('─' * [Math]::Max(0, 56 - $title.Length)))
-    Write-Host ""
-    foreach ($l in $lines) { Write-Host ("      {0}" -f $l) }
-    Write-Host ""
     if ($env:SM_WELCOME_ASSUME_YES) {
         Write-Host "  [+] Proceeding (SM_WELCOME_ASSUME_YES set)" -ForegroundColor DarkGray
         return
@@ -274,32 +254,7 @@ $pwshPath   = Find-Pwsh7
 $gitPath    = Find-Git
 $cosignPath = Find-Cosign
 
-$prereqLines = @(
-    "Installs three tools to ~/.local/bin so the SimpleMotion toolchain",
-    "is 100% local and per-user. System-wide installs of PowerShell, Git,",
-    "or cosign are deliberately ignored — only the copies we provision",
-    "under ~/.local/bin are used for the rest of onboarding (and by",
-    "sm-welcome.exe going forward).",
-    "",
-    "Each is fetched from its project's GitHub release, SHA256-verified",
-    "against the digest the GitHub API publishes alongside the asset, and",
-    "unpacked into ~/.local/bin (no admin rights, no winget, no MSI).",
-    "",
-    "  PowerShell 7  -> ~/.local/bin/pwsh-7/pwsh.exe       (portable zip)",
-    "  Git           -> ~/.local/bin/git/cmd/git.exe       (PortableGit 7z)",
-    "  cosign        -> ~/.local/bin/cosign.exe            (single binary)",
-    "",
-    "After cosign lands, we run `cosign initialize` against GitHub's",
-    "Sigstore TUF repo (tuf-repo.github.com) so cosign can verify GitHub-",
-    "issued attestations natively in Section 2. The TUF cache lands in",
-    "~/.simplemotion/sigstore.",
-    "",
-    "Detected at ~/.local/bin:",
-    ("  PowerShell 7: {0}" -f $(if (-not $pwshPath)   { 'missing — will install' } else { "present ($pwshPath)" })),
-    ("  Git:          {0}" -f $(if (-not $gitPath)    { 'missing — will install' } else { "present ($gitPath)" })),
-    ("  cosign:       {0}" -f $(if (-not $cosignPath) { 'missing — will install' } else { "present ($cosignPath)" }))
-)
-Confirm-Section 'Section 1 of 3: Prerequisites' $prereqLines
+Confirm-Section 'Section 1 of 3: Prerequisites'
 
 if (-not $pwshPath) {
     Write-Host "  [*] Installing PowerShell 7 (portable)..." -ForegroundColor DarkGray
@@ -366,32 +321,7 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
     }
 }
 
-$smLines = @(
-    "Downloads and verifies sm-welcome.exe from simplemotion/$channel before",
-    "any code from the release channel runs:",
-    "",
-    "  1. Fetch the binary plus two sidecar files:",
-    "       <asset>.sha256             content checksum",
-    "       <asset>.sigstore.jsonl     sigstore build-provenance bundle",
-    "  2. Hash the binary; compare against the .sha256 file.",
-    "  3. Verify the sigstore bundle with cosign against GitHub's Sigstore",
-    "     TUF (set up in Section 1) — checks the bundle's cert identity",
-    "     matches the 3400-0009-SM-Welcome source repo.",
-    "  4. Move the verified binary to $installDir.",
-    "",
-    "The binary is never installed or invoked until all checks pass."
-)
-$smLines += ""
-if ($skipDownload) {
-    $smLines += "Status: fast-path skip — local $localVer matches latest on channel=$channel."
-} elseif ($localVer -and $latestVer) {
-    $smLines += "Status: local $localVer → installing $latestVer (channel=$channel)."
-} elseif ($latestVer) {
-    $smLines += "Status: installing $latestVer (channel=$channel)."
-} else {
-    $smLines += "Status: installing latest (channel=$channel)."
-}
-Confirm-Section 'Section 2 of 3: sm-welcome' $smLines
+Confirm-Section 'Section 2 of 3: sm-welcome'
 
 if (-not $skipDownload) {
     $installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1')
@@ -404,27 +334,7 @@ if (-not $skipDownload) {
 }
 
 # ── Section 3: Launch ─────────────────────────────────────────────────
-$launchLines = @()
-if ($pwshPath) {
-    $launchLines += "Opens sm-welcome.exe in a brand-new PowerShell 7 console window."
-    $launchLines += "The original window stays open. -NoExit keeps the new pwsh"
-    $launchLines += "session alive after sm-welcome finishes, so onboarding lands you"
-    $launchLines += "in the modern shell rather than dropping back to PS 5.1."
-    $launchLines += ""
-    $launchLines += "Env vars set in this session (\$env:SM_EMAIL, \$env:SM_CHANNEL,"
-    $launchLines += "\$env:SM_WELCOME_*) flow through Start-Process and are visible"
-    $launchLines += "to sm-welcome.exe in the new console."
-    $launchLines += ""
-    $launchLines += ("  pwsh:   $pwshPath")
-    $launchLines += ("  binary: $localBin")
-} else {
-    $launchLines += "PowerShell 7 is unavailable, so sm-welcome.exe will run in the"
-    $launchLines += "current Windows PowerShell session instead. No new console window"
-    $launchLines += "is opened."
-    $launchLines += ""
-    $launchLines += ("  binary: $localBin")
-}
-Confirm-Section 'Section 3 of 3: Launch' $launchLines
+Confirm-Section 'Section 3 of 3: Launch'
 
 if ($pwshPath) {
     Start-Process $pwshPath -ArgumentList @('-NoExit', '-Command', "& '$localBin'")
