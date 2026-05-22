@@ -49,6 +49,12 @@ printf '\n  SimpleMotion — Development Environment Onboarding\n  ════�
 # the same lib when it runs in Section 2.
 eval "$(curl -fsSL https://install.simplemotion.com/sm-install-lib.sh)"
 
+# Route tempfiles under ~/SimpleMotion/.tmpdir so curl-to-mktemp writes
+# don't hit the macOS /var/folders/.../T/ failure modes (EDR scans,
+# sandbox boundaries, periodic cleanup). See sm-install-lib.sh for the
+# function body + rationale.
+sm_route_tmpdir
+
 # sm-welcome's step-counter UI accounts for the bootstrap's pre-binary
 # steps via env vars the binary reads (banner suppression + offset).
 export SM_WELCOME_NO_BANNER=1

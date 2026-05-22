@@ -74,6 +74,12 @@ set -euo pipefail
 # the bootstrap and standalone-install code paths.
 eval "$(curl -fsSL https://install.simplemotion.com/sm-install-lib.sh)"
 
+# Route tempfiles under ~/SimpleMotion/.tmpdir before the first mktemp.
+# Standalone invocations (sm-welcome.sh has already set this, but
+# sm-install.sh is also invoked from other entrypoints — sm-simplicity,
+# future tools — and must self-route. Idempotent.) See sm-install-lib.sh.
+sm_route_tmpdir
+
 # Surface the dirs we and the sm-welcome Rust binary install into so
 # `command -v` finds our own tools (cosign, sm-welcome, future helpers)
 # on the *first* run, before any rc-file PATH export has had a chance
@@ -201,12 +207,12 @@ else
     GREEN=''; RED=''; DIM=''; BOLD=''; RESET=''; ERASE=''
 fi
 
-TMPBIN=$(mktemp)
-TMPSUM=$(mktemp)
+TMPBIN=$(sm_mktemp)
+TMPSUM=$(sm_mktemp)
 # Use the canonical sigstore-bundle suffix on the temp file (cosign and
 # gh both reject paths without `.json`/`.jsonl`). Clean up both the
 # suffixed and bare mktemp paths.
-TMPATT_RAW=$(mktemp)
+TMPATT_RAW=$(sm_mktemp)
 TMPATT="${TMPATT_RAW}.sigstore.jsonl"
 trap 'rm -f "$TMPBIN" "$TMPSUM" "$TMPATT" "$TMPATT_RAW"' EXIT
 

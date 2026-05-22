@@ -24,6 +24,51 @@
 #                            so cosign can verify GitHub-issued attestations
 #                            natively. Cache lands in $TUF_ROOT
 #                            (~/.simplemotion/sigstore by default).
+#   sm_route_tmpdir          Route TMPDIR to ~/SimpleMotion/.tmpdir so
+#                            mktemp + curl-to-tempfile writes land on
+#                            a SimpleMotion-controlled path, not the
+#                            macOS /var/folders/.../T/ default. Each
+#                            entrypoint that sources this lib should
+#                            call it before the first sm_mktemp.
+#   sm_mktemp                Portable wrapper for `mktemp -p "$TMPDIR"`.
+#                            Required because macOS BSD mktemp (no args)
+#                            ignores TMPDIR and goes to
+#                            /var/folders/.../T/ via the confstr libc
+#                            call. All bootstrap mktemp call sites
+#                            should use sm_mktemp.
+
+# Best-effort TMPDIR redirect. macOS' /var/folders/.../T/ occasionally
+# hits transient write failures under EDR scanning, sandbox boundaries,
+# or periodic cleanup — curl-to-tempfile then bails with `curl: (56)
+# Failure writing output to destination, passed N returned 0`. Routing
+# under ~/SimpleMotion/.tmpdir puts tempfiles on the same APFS volume
+# as the install destination (~/.simplemotion/bin/) and under user-
+# controlled state — same surface clean-all wipes.
+#
+# Falls back silently to system default if HOME isn't usable. Idempotent
+# — safe to call multiple times.
+sm_route_tmpdir() {
+    if [[ -n "${HOME:-}" ]] && mkdir -p "$HOME/SimpleMotion/.tmpdir" 2>/dev/null; then
+        export TMPDIR="$HOME/SimpleMotion/.tmpdir"
+    fi
+}
+
+# macOS BSD mktemp (no args) calls confstr(_CS_DARWIN_USER_TEMP_DIR)
+# and goes to /var/folders/.../T/ — IGNORING $TMPDIR. The man page
+# claims otherwise but the implementation overrides at the libc level.
+# `mktemp -p <dir>` is the portable knob that actually routes both BSD
+# and GNU mktemp to the requested directory.
+#
+# All bootstrap mktemp calls go through this helper. Falls back to bare
+# `mktemp` when TMPDIR is unset / unusable so we don't hard-fail if
+# sm_route_tmpdir was skipped.
+sm_mktemp() {
+    if [[ -n "${TMPDIR:-}" && -d "$TMPDIR" ]]; then
+        mktemp -p "$TMPDIR"
+    else
+        mktemp
+    fi
+}
 
 confirm_section() {
     local title="$1"
@@ -85,7 +130,7 @@ ensure_cosign() {
     local sums_url="https://github.com/sigstore/cosign/releases/latest/download/cosign_checksums.txt"
 
     local tmp_bin tmp_sums
-    tmp_bin=$(mktemp); tmp_sums=$(mktemp)
+    tmp_bin=$(sm_mktemp); tmp_sums=$(sm_mktemp)
     if ! curl -fsSL "$cosign_url" -o "$tmp_bin" 2>/dev/null \
        || ! curl -fsSL "$sums_url" -o "$tmp_sums" 2>/dev/null; then
         rm -f "$tmp_bin" "$tmp_sums"
@@ -125,7 +170,7 @@ initialize_cosign_tuf() {
     export TUF_ROOT
     mkdir -p "$TUF_ROOT"
     local tmp_root
-    tmp_root=$(mktemp)
+    tmp_root=$(sm_mktemp)
     if ! curl -fsSL "https://tuf-repo.github.com/1.root.json" -o "$tmp_root" 2>/dev/null; then
         rm -f "$tmp_root"
         printf '      [-] cosign TUF init skipped (couldn'\''t fetch 1.root.json)\n'
