@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## What this repo is
 
-`simplemotion/install` is the **public** installer-script home for SimpleMotion binary distribution. It hosts the shell installers consumers fetch via `curl | bash` or `irm | iex`, plus the landing page served at `install.simplemotion.com`.
+`simplemotion/sm-install` is the **public** installer-script home for SimpleMotion binary distribution. It hosts the shell installers consumers fetch via `curl | bash` or `irm | iex`, plus the landing page served at `install.simplemotion.com`.
 
 This repo contains **no binaries**. It is the routing layer between consumers and the four channel repos that host actual release assets.
 
@@ -12,13 +12,13 @@ This repo contains **no binaries**. It is the routing layer between consumers an
 
 | Repo | Visibility | Role |
 |---|---|---|
-| `simplemotion/install` (this) | public | Installer scripts + Pages |
-| `simplemotion/release` | public | Production binaries |
-| `simplemotion/preview` | public | Preview / beta binaries |
-| `simplemotion/private` | private | Internal-stable binaries |
-| `simplemotion/testing` | private | In-flight test builds |
+| `simplemotion/sm-install` (this) | public | Installer scripts + Pages |
+| `simplemotion/sm-release` | public | Production binaries |
+| `simplemotion/sm-preview` | public | Preview / beta binaries |
+| `simplemotion/sm-private` | private | Internal-stable binaries |
+| `simplemotion/sm-testing` | private | In-flight test builds |
 
-`sm-install.sh` and `sm-install.ps1` map `--channel <name>` to `simplemotion/<name>` and fetch the appropriate `releases/latest`. The channel-repo split avoids the prerelease-flag + latest-flag conflict that the prior `sm-get` single-repo design hit on 2026-05-16.
+`sm-install.sh` and `sm-install.ps1` map `--channel <name>` to `simplemotion/sm-<name>` and fetch the appropriate `releases/latest`. The channel-repo split avoids the prerelease-flag + latest-flag conflict that the prior `sm-get` single-repo design hit on 2026-05-16.
 
 All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enterprise naming rule (see `9000-0000-SM-Govern/DISTRIBUTE.md`).
 
