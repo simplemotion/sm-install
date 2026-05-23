@@ -19,10 +19,10 @@
 #   --channel release|preview|private|testing
 #                                Channel to resolve into a tag. Each
 #                                channel maps to its own GitHub repo:
-#                                  release → simplemotion/release  (public)
-#                                  preview → simplemotion/preview  (public)
-#                                  private → simplemotion/private  (private — needs authed gh)
-#                                  testing → simplemotion/testing  (private — needs authed gh)
+#                                  release → simplemotion/sm-release  (public)
+#                                  preview → simplemotion/sm-preview  (public)
+#                                  private → simplemotion/sm-private  (private — needs authed gh)
+#                                  testing → simplemotion/sm-testing  (private — needs authed gh)
 #                                Default: $SM_CHANNEL or 'release'.
 #   --repo OWNER/NAME            Override the channel→repo default.
 #                                Useful for development or hosting on a
@@ -135,7 +135,7 @@ case "$CHANNEL" in
     *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|private|testing)" >&2; exit 1 ;;
 esac
 if [[ -z "$REPO" ]]; then
-    REPO="simplemotion/${CHANNEL}"
+    REPO="simplemotion/sm-${CHANNEL}"
 fi
 
 SOURCE_REPO="${SOURCE_REPO:-$REPO}"

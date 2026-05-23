@@ -1,4 +1,4 @@
-# simplemotion/install
+# simplemotion/sm-install
 
 Installer scripts for [SimpleMotion](https://simplemotion.com) binary products. One command installs the SimpleMotion CLIs.
 
@@ -6,10 +6,10 @@ This is the public bootstrap entry point served at **`install.simplemotion.com`*
 
 | Channel | Repo | Visibility | Audience |
 |---|---|---|---|
-| `release` | [simplemotion/release](https://github.com/simplemotion/release) | public | All consumers — stable production builds |
-| `preview` | [simplemotion/preview](https://github.com/simplemotion/preview) | public | Early-access consumers — features in flight |
-| `private` | [simplemotion/private](https://github.com/simplemotion/private) | private | SimpleMotion internal — stable internal-only releases |
-| `testing` | [simplemotion/testing](https://github.com/simplemotion/testing) | private | SimpleMotion internal — in-flight test builds |
+| `release` | [simplemotion/sm-release](https://github.com/simplemotion/sm-release) | public | All consumers — stable production builds |
+| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | public | Early-access consumers — features in flight |
+| `private` | [simplemotion/sm-private](https://github.com/simplemotion/sm-private) | private | SimpleMotion internal — stable internal-only releases |
+| `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | private | SimpleMotion internal — in-flight test builds |
 
 Each channel repo has its own `releases/latest` namespace, so channel selection is unambiguous and there's no prerelease-flag coordination required.
 
@@ -54,10 +54,10 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 
 | Selector | Resolves to |
 |---|---|
-| `--channel release` (default) or `SM_CHANNEL=release` | newest release on `simplemotion/release` |
-| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/preview` |
-| `--channel private` or `SM_CHANNEL=private` | newest release on `simplemotion/private` (private repo — requires authed `gh` with read access) |
-| `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/testing` (private repo — internal use) |
+| `--channel release` (default) or `SM_CHANNEL=release` | newest release on `simplemotion/sm-release` |
+| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` |
+| `--channel private` or `SM_CHANNEL=private` | newest release on `simplemotion/sm-private` (private repo — requires authed `gh` with read access) |
+| `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (private repo — internal use) |
 
 ## What the installers do
 

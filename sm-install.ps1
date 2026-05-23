@@ -72,7 +72,7 @@ $env:PATH = (Join-Path $HOME '.simplemotion\bin') + ';' + (Join-Path $HOME '.loc
 
 if (-not $Channel) { $Channel = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' } }
 # Channel → repo defaulting. Each channel maps to its own GitHub repo.
-if (-not $Repo) { $Repo = "simplemotion/$Channel" }
+if (-not $Repo) { $Repo = "simplemotion/sm-$Channel" }
 if (-not $SourceRepo) { $SourceRepo = $Repo }
 if (-not $InstallDir) {
     if ($env:SM_INSTALL_DIR) {
