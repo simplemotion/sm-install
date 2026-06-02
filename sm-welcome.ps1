@@ -256,7 +256,7 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
     switch ($channel) {
         'release' { $channelRepo = 'simplemotion/sm-release' }
         'preview' { $channelRepo = 'simplemotion/sm-preview' }
-        'private' { $channelRepo = 'simplemotion/sm-private' }
+        'develop' { $channelRepo = 'simplemotion/sm-develop' }
         'testing' { $channelRepo = 'simplemotion/sm-testing' }
     }
     if ($channelRepo) {
