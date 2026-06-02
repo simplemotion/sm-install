@@ -16,12 +16,12 @@
 #                                .exe on this script; .ps1 adds it).
 #
 # Optional flags:
-#   --channel release|preview|private|testing
+#   --channel release|preview|develop|testing
 #                                Channel to resolve into a tag. Each
 #                                channel maps to its own GitHub repo:
 #                                  release → simplemotion/sm-release  (public)
 #                                  preview → simplemotion/sm-preview  (public)
-#                                  private → simplemotion/sm-private  (private — needs authed gh)
+#                                  develop → simplemotion/sm-develop  (internal — needs authed gh)
 #                                  testing → simplemotion/sm-testing  (private — needs authed gh)
 #                                Default: $SM_CHANNEL or 'release'.
 #   --repo OWNER/NAME            Override the channel→repo default.
@@ -131,8 +131,8 @@ esac
 # `releases/latest` on each is unambiguous and there's no prerelease
 # flag dance. `--repo` overrides for development / external use.
 case "$CHANNEL" in
-    release|preview|private|testing) ;;
-    *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|private|testing)" >&2; exit 1 ;;
+    release|preview|develop|testing) ;;
+    *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing)" >&2; exit 1 ;;
 esac
 if [[ -z "$REPO" ]]; then
     REPO="simplemotion/sm-${CHANNEL}"
@@ -322,7 +322,7 @@ chmod +x "$TMPBIN"
 # this install. Consumed by the binary's own `update` subcommand so
 # subsequent refreshes target the channel the user actually installed
 # from (instead of defaulting to `release` and downgrading users on
-# `preview`/`private`/`testing`). Written best-effort: failure to create
+# `preview`/`develop`/`testing`). Written best-effort: failure to create
 # the receipt is logged but does not abort the install.
 write_receipt() {
     local pkg="$1" channel="$2" tag="$3" source_repo="$4" sha="$5"

@@ -15,7 +15,7 @@ This repo contains **no binaries**. It is the routing layer between consumers an
 | `simplemotion/sm-install` (this) | public | Installer scripts + Pages |
 | `simplemotion/sm-release` | public | Production binaries |
 | `simplemotion/sm-preview` | public | Preview / beta binaries |
-| `simplemotion/sm-private` | private | Internal-stable binaries |
+| `simplemotion/sm-develop` | internal | Development — earliest builds |
 | `simplemotion/sm-testing` | private | In-flight test builds |
 
 `sm-install.sh` and `sm-install.ps1` map `--channel <name>` to `simplemotion/sm-<name>` and fetch the appropriate `releases/latest`. The channel-repo split avoids the prerelease-flag + latest-flag conflict that the prior `sm-get` single-repo design hit on 2026-05-16.
@@ -34,7 +34,7 @@ All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enter
 - **No "Co-Authored-By" trailers** in commits.
 - **All IP assigned to SimpleMotion.Global Pty Ltd** per `ASSIGN.md`.
 - **Installers must be portable.** `*.sh` runs on bare macOS/Linux before any toolchain is installed — no bash-only constructs that POSIX `sh` can't read, no Homebrew assumptions, no `sudo`. `*.ps1` runs on stock Windows PowerShell.
-- **Channel set is closed**: `release`, `preview`, `private`, `testing`. Adding a fifth channel requires creating a new channel repo and updating both `install.{sh,ps1}` and the source-repo dispatch routing.
+- **Channel set is closed**: `release`, `preview`, `develop`, `testing`. Adding a fifth channel requires creating a new channel repo and updating both `install.{sh,ps1}` and the source-repo dispatch routing.
 - **Versioning follows the SimpleMotion enterprise policy** (see appendix in `CHANGE.md`).
 
 ## DNS / Pages

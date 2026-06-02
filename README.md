@@ -8,7 +8,7 @@ This is the public bootstrap entry point served at **`install.simplemotion.com`*
 |---|---|---|---|
 | `release` | [simplemotion/sm-release](https://github.com/simplemotion/sm-release) | public | All consumers — stable production builds |
 | `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | public | Early-access consumers — features in flight |
-| `private` | [simplemotion/sm-private](https://github.com/simplemotion/sm-private) | private | SimpleMotion internal — stable internal-only releases |
+| `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | internal | SimpleMotion internal — earliest development builds |
 | `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | private | SimpleMotion internal — in-flight test builds |
 
 Each channel repo has its own `releases/latest` namespace, so channel selection is unambiguous and there's no prerelease-flag coordination required.
@@ -24,8 +24,8 @@ bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcom
 # preview channel (early access)
 bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome --channel preview
 
-# private channel (SimpleMotion internal)
-bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome --channel private
+# develop channel (SimpleMotion internal)
+bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome --channel develop
 ```
 
 The `bash -c "$(curl …)"` form (rather than `curl … | bash`) is required so the installer can read interactive prompts from your terminal.
@@ -56,7 +56,7 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 |---|---|
 | `--channel release` (default) or `SM_CHANNEL=release` | newest release on `simplemotion/sm-release` |
 | `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` |
-| `--channel private` or `SM_CHANNEL=private` | newest release on `simplemotion/sm-private` (private repo — requires authed `gh` with read access) |
+| `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (internal repo — requires authed `gh` with read access) |
 | `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (private repo — internal use) |
 
 ## What the installers do

@@ -50,7 +50,7 @@ param(
     [ValidateSet('install','run','install-and-run')] [string]$Mode = 'install',
     [string]$InstallDir = '',
     [string]$Version = '',
-    [ValidateSet('release','preview','private','testing')] [string]$Channel = '',
+    [ValidateSet('release','preview','develop','testing')] [string]$Channel = '',
     [ValidateSet('triple','short')] [string]$AssetSuffix = 'triple',
     [string[]]$BinArgs = @()
 )
