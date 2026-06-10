@@ -50,7 +50,7 @@ param(
     [ValidateSet('install','run','install-and-run')] [string]$Mode = 'install',
     [string]$InstallDir = '',
     [string]$Version = '',
-    [ValidateSet('release','preview','develop','testing')] [string]$Channel = '',
+    [ValidateSet('release','preview','develop','testing','private')] [string]$Channel = '',
     [ValidateSet('triple','short')] [string]$AssetSuffix = 'triple',
     [string[]]$BinArgs = @()
 )
@@ -71,6 +71,12 @@ Invoke-Expression $smInstallLib
 $env:PATH = (Join-Path $HOME '.simplemotion\bin') + ';' + (Join-Path $HOME '.local\bin') + ';' + $env:PATH
 
 if (-not $Channel) { $Channel = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' } }
+# Legacy alias: the sm-private channel repo was renamed sm-develop. Old
+# install receipts record channel = "private"; keep them working.
+if ($Channel -eq 'private') {
+    Write-Host "  [!] channel 'private' is now 'develop'; continuing as develop" -ForegroundColor Yellow
+    $Channel = 'develop'
+}
 # Channel → repo defaulting. Each channel maps to its own GitHub repo.
 if (-not $Repo) { $Repo = "simplemotion/sm-$Channel" }
 if (-not $SourceRepo) { $SourceRepo = $Repo }

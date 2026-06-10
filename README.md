@@ -13,6 +13,16 @@ This is the public bootstrap entry point served at **`install.simplemotion.com`*
 
 Each channel repo has its own `releases/latest` namespace, so channel selection is unambiguous and there's no prerelease-flag coordination required.
 
+### Promotion pipeline
+
+A build promotes through the channels in order — `develop` → `testing` → `preview` → `release` — carrying a channel-prefixed tag at each phase until it earns the final clean release tag:
+
+```
+sm-develop-v0.0.1.#  →  sm-testing-v0.0.1.#  →  sm-preview-v0.0.1.#  →  sm-release-v0.0.1.#  →  v0.0.1
+```
+
+`#` is the build counter within a phase. Each phase's builds are published to its channel repo; the final clean `v0.0.1` tag lands on `sm-release` as the production release.
+
 ## Install — sm-welcome (onboarding CLI)
 
 ### macOS / Linux
@@ -58,6 +68,8 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 | `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` |
 | `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (internal repo — requires authed `gh` with read access) |
 | `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (private repo — internal use) |
+
+`--channel private` / `SM_CHANNEL=private` is accepted as a legacy alias for `develop` (the `sm-private` channel repo was renamed `sm-develop`).
 
 ## What the installers do
 

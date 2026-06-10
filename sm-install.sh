@@ -132,6 +132,11 @@ esac
 # flag dance. `--repo` overrides for development / external use.
 case "$CHANNEL" in
     release|preview|develop|testing) ;;
+    private)
+        # Legacy alias: the sm-private channel repo was renamed sm-develop.
+        # Old install receipts record channel = "private"; keep them working.
+        echo "sm-install.sh: channel 'private' is now 'develop'; continuing as develop" >&2
+        CHANNEL="develop" ;;
     *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing)" >&2; exit 1 ;;
 esac
 if [[ -z "$REPO" ]]; then

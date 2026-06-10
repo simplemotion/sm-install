@@ -258,6 +258,7 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
         'preview' { $channelRepo = 'simplemotion/sm-preview' }
         'develop' { $channelRepo = 'simplemotion/sm-develop' }
         'testing' { $channelRepo = 'simplemotion/sm-testing' }
+        'private' { $channelRepo = 'simplemotion/sm-develop' }   # legacy alias for develop
     }
     if ($channelRepo) {
         try {
