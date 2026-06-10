@@ -174,7 +174,8 @@ LATEST_VER=""
 if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -x "$LOCAL_BIN" ]]; then
     LOCAL_VER=$("$LOCAL_BIN" -V 2>/dev/null | awk '{print $2}' | sed 's/^v//')
     case "$CHANNEL_VAL" in
-        release|preview|develop|testing) CHANNEL_REPO="simplemotion/${CHANNEL_VAL}" ;;
+        release|preview|develop|testing) CHANNEL_REPO="simplemotion/sm-${CHANNEL_VAL}" ;;
+        private) CHANNEL_REPO="simplemotion/sm-develop" ;;   # legacy alias for develop
         *) CHANNEL_REPO="" ;;
     esac
     LATEST_TAG=""
