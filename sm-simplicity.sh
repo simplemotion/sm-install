@@ -19,4 +19,5 @@ exec bash -c "$INSTALL_SH" install \
     --package sm-simplicity \
     --source-repo 3400-0000-SM-Software/3400-0026-SM-Simplicity \
     --tag-prefix sm-simplicity-v \
+    --asset-suffix short \
     --mode install
