@@ -20,53 +20,52 @@ The first release tag will be `v0.1.0`.
 
 # Appendix — Enterprise versioning policy
 
-Adopted 2026-05-12; revised 2026-06-14 to add the per-commit `-develop-` tag stream and the `-release-` candidate stage (superseding the earlier `-cm-` CI-only label), and to add the monorepo-workspace rule (one repo-wide version + a single bare tag, no per-package prefix). Supersedes the 4-component `W.X.Y.Z` scheme used before. This section is reproduced verbatim in every SimpleMotion repo's `CHANGE.md` so each file is self-contained.
+Adopted 2026-05-12; revised 2026-06-14 to add the per-commit `-develop-` tag stream and the `-release-` candidate stage (superseding the earlier `-cm-` CI-only label), and to add the monorepo-workspace rule (one repo-wide version + a single bare tag, no per-package prefix); revised 2026-06-15 to record develop builds in `CHANGE.md` (one row per notable change, keyed by the `-develop-NNN` tag), clarifying that "no GitHub Release" governs distribution, not changelog listing; reconciled 2026-06-15 to the live channel architecture — the `-release-NNN` candidate is dropped (`preview` is the public candidate; `vX.Y.Z-release` is the GA-publish trigger), `-develop-` publishes to the internal `sm-develop` channel for distribution-surface products (tag/version-only for internal crates), and all channel/distribution specifics are deferred to the Distribution Standard (`9000-…-SM-Govern/CLAUDE.md`) as the single source of truth. Supersedes the 4-component `W.X.Y.Z` scheme used before. This section is reproduced verbatim in every SimpleMotion repo's `CHANGE.md` so each file is self-contained.
 
 ## TL;DR
 
 ```
-vX.Y.Z                  GA release   (clean tag, public — sm-get)
-vX.Y.Z-release-NNN      release RC   (tagged prerelease, public — sm-get)
-vX.Y.Z-preview-NNN      preview      (tagged prerelease, public — sm-get)
-vX.Y.Z-testing-NNN      testing      (tagged prerelease, internal — sm-int)
-vX.Y.Z-develop-NNN      dev build    (tagged on every commit on main; no Release)
+vX.Y.Z-develop-NNN   dev build    (per-commit on main, or per-bump in a workspace)
+vX.Y.Z-testing-NNN   testing      (early internal build)
+vX.Y.Z-preview-NNN   preview      (public candidate)
+vX.Y.Z-release       GA trigger   (publishes the GA release as vX.Y.Z)
+vX.Y.Z               GA release   (the published GA version)
 ```
 
-Lifecycle, least → most mature: **develop → testing → preview → release → GA**.
+Lifecycle, least → most mature: **develop → testing → preview → GA**. GA is cut by
+pushing the **`vX.Y.Z-release`** trigger tag (published as `vX.Y.Z`); `preview` is
+the public candidate — there is no separate `-release-NNN` RC stage.
+
+**Distribution is out of scope here.** Which channel/repo each suffix routes to,
+its visibility, and how consumers install it are defined by the **Distribution
+Standard** (`9000-…-SM-Govern/CLAUDE.md` — the single source of truth for
+channels). This appendix governs only the **version/tag semantics**.
 
 - `X.Y.Z` is strict SemVer 2.0.0.
 - `NNN` is zero-padded to three digits (`001` … `999`).
 - Every prerelease targets the *next* version, so `vX.Y.Z-<stage>-NNN` < `vX.Y.Z` — the GA tag always sorts highest. This is the only load-bearing ordering invariant.
 - `-develop-NNN` is stamped automatically on **every commit on `main`** (one tag per commit) as the per-commit tracking stream; it is never published as a GitHub Release.
-- **Ordering caveat:** the stage words sort *alphabetically* (`develop` < `preview` < `release` < `testing`), which is NOT the lifecycle order — `testing` sorts highest among prereleases despite being least mature. Channels are picked by **suffix-string matching** in `install.sh`, never by sort order, so this is harmless. Never rely on "highest prerelease = most mature."
+- **Develop builds are recorded in `CHANGE.md`** — one row per notable change (or version bump), keyed by the `-develop-NNN` tag of the commit that shipped it. "No GitHub Release" governs *distribution*, not documentation: the changelog still tracks the work. (Named `-testing-`/`-preview-` tags and the `-release` GA trigger, once cut, are recorded the same way.)
+- **Ordering caveat:** the prerelease stage words sort *alphabetically* (`develop` < `preview` < `testing`), which is NOT the lifecycle order — `testing` sorts highest despite being least mature. Channels are picked by **suffix-string matching**, never by sort order, so this is harmless. Never rely on "highest prerelease = most mature."
 
-**Channel access:**
-
-| Channel | Suffix | Distribution | Anonymous access | Audience |
-|---|---|---|---|---|
-| GA release | none | `simplemotion/sm-get` Releases | Yes | Everyone |
-| Release RC | `-release-NNN` | `simplemotion/sm-get` Releases (prerelease) | Yes | Everyone (opt-in) |
-| Preview | `-preview-NNN` | `simplemotion/sm-get` Releases (prerelease) | Yes | Everyone (opt-in) |
-| Testing | `-testing-NNN` | `simplemotion/sm-int` Releases (prerelease) | **No** — gated on GitHub enterprise membership | SimpleMotion internal staff |
-| Develop | `-develop-NNN` | none (git tag + CI artifact only) | — | CI / per-commit tracking |
+**Channel access** is defined by the **Distribution Standard** (`9000-…-SM-Govern/CLAUDE.md` §4–§6), the single source of truth for the channel→repo mapping, visibility, and consumer install access. In brief: `preview` and GA are public; `testing` and `develop` are internal. The tag suffix is the routing key (`-develop-`/`-testing-`/`-preview-`/`-release`). This appendix does not restate the channel list — that's how the two docs previously drifted.
 
 ## Timeline of a release cycle
 
 ```
-commit   tag                    GitHub Release   Channel  Notes
-──────   ────────────────────   ──────────────   ───────  ─────────────────
-abc001   v0.1.0                 Release          GA       latest stable
-abc002   v0.1.1-develop-001     —                develop  per-commit dev tag (auto)
-abc003   v0.1.1-develop-002     —                develop  per-commit dev tag (auto)
-abc004   v0.1.1-testing-001     Prerelease       testing  early internal build
-abc005   v0.1.1-develop-003     —                develop  work continues on main
-abc006   v0.1.1-preview-001     Prerelease       preview  first public candidate
-abc007   v0.1.1-release-001     Prerelease       release  final candidate, frozen
-abc008   v0.1.1                 Release          GA       cut from the release RC
-abc009   v0.1.2-develop-001     —                develop  next dev cycle
+commit   tag                    stage    notes
+──────   ────────────────────   ───────  ─────────────────
+abc001   v0.1.0                 GA       latest stable
+abc002   v0.1.1-develop-001     develop  per-commit (or per-bump) dev tag
+abc003   v0.1.1-develop-002     develop  …
+abc004   v0.1.1-testing-001     testing  early internal build
+abc005   v0.1.1-develop-003     develop  work continues on main
+abc006   v0.1.1-preview-001     preview  public candidate
+abc007   v0.1.1-release         GA       push the -release trigger → published as v0.1.1
+abc008   v0.1.2-develop-001     develop  next dev cycle
 ```
 
-**Rule:** `-develop-NNN` is auto-stamped on every commit on `main`; its base is *one patch ahead* of the most recent reachable GA release and `NNN` counts commits since that release. The named prerelease stages (`-testing-`, `-preview-`, `-release-`) are cut by hand from a chosen commit; each stage keeps its own `NNN` counter per base version.
+**Rule:** `-develop-NNN` is stamped per commit on `main` (single-binary repos, CI-owned) or per bump (workspaces, manifest-sourced); its base is *one patch ahead* of the most recent reachable GA release and `NNN` counts commits since that release. The named stages `-testing-` and `-preview-` are cut by hand from a chosen commit, each with its own `NNN` counter per base version. **GA is cut by pushing `vX.Y.Z-release`** (no `NNN`), which publishes as `vX.Y.Z` — there is no `-release-NNN` candidate.
 
 ## Why `-develop` / `-testing` / `-preview` / `-release` and not `+`-metadata
 
@@ -77,7 +76,7 @@ Both are valid per SemVer 2.0.0, but they differ in precedence semantics:
 | Pre-release (`-`) | Yes — affects comparison | `0.1.1-preview-001` < `0.1.1` |
 | Build metadata (`+`) | No — ignored by comparators | `0.1.0+preview-001` ≡ `0.1.0` |
 
-The `-` form is the only choice that lets any tool (Cargo, npm, pip, GitHub's "Latest" picker, `semver-cli`) correctly order pre-release tags below their target release. We accept the consequence that **`-develop-NNN`, `-testing-NNN`, `-preview-NNN`, and `-release-NNN` belong to the *next* version**, not the most recent release.
+The `-` form is the only choice that lets any tool (Cargo, npm, pip, GitHub's "Latest" picker, `semver-cli`) correctly order pre-release tags below their target release. We accept the consequence that **`-develop-NNN`, `-testing-NNN`, and `-preview-NNN` belong to the *next* version**, not the most recent release. (`vX.Y.Z-release` is the GA-publish trigger, not a pre-release — it ships *as* `vX.Y.Z`.)
 
 ## Tagging commands
 
@@ -85,29 +84,27 @@ The `-` form is the only choice that lets any tool (Cargo, npm, pip, GitHub's "L
 # Dev build — AUTOMATIC. CI stamps v<next>-develop-NNN on every commit to
 # main; you never tag develop by hand. (See the build workflow below.)
 
-# Testing (internal early build; lands on sm-int)
+# Testing (early internal build)
 git tag -a v0.1.1-testing-001 -m "Testing v0.1.1-testing-001"
 git push origin v0.1.1-testing-001
 
-# Preview (public candidate; lands on sm-get)
+# Preview (public candidate)
 git tag -a v0.1.1-preview-001 -m "Preview v0.1.1-preview-001"
 git push origin v0.1.1-preview-001
 
-# Release candidate (final public gate before GA; lands on sm-get)
-git tag -a v0.1.1-release-001 -m "Release candidate v0.1.1-release-001"
-git push origin v0.1.1-release-001
-
-# GA release
-git tag -a v0.1.1 -m "Release v0.1.1"
-git push origin v0.1.1
+# GA release — push the -release TRIGGER tag; CI publishes it as v0.1.1.
+git tag -a v0.1.1-release -m "Release v0.1.1"
+git push origin v0.1.1-release
 ```
 
-- **`-develop-NNN` is never tagged by hand** — CI owns it. The commands above are for the human-cut stages only.
+(Which channel/repo each tag lands on is the Distribution Standard's concern, not this appendix's.)
+
+- **`-develop-NNN` is never tagged by hand** on single-binary repos — CI owns it. (In a workspace it's advanced by the bump helper — see the monorepo rule.) The cut stages below are the human-pushed ones.
 - **Increment NNN manually** for the cut stages (`-testing-002`, `-preview-002`, …). No tooling enforces uniqueness.
 - **Three-digit zero-padding** is mandatory. Without it, `-preview-10` sorts before `-preview-2` lexically.
-- **Never move a tag once pushed.** Cut a new testing/preview/release if you need to revise.
+- **Never move a tag once pushed.** Cut a new testing/preview if you need to revise; cut a new patch for GA.
 - **Only tag from `main` or a `release/v*.x` branch.** Other branches must never carry version tags.
-- **Testing, preview, and release share the `NNN` counter namespace per base version** — pick the next free number across all three. Cleaner audit trail than parallel counters.
+- **Testing and preview share the `NNN` counter namespace per base version** — pick the next free number across both. GA uses the suffixless `-release` trigger (no `NNN`).
 
 ## Version computation in CI
 
@@ -154,114 +151,76 @@ manifests** and advances it with the bump helper: every crate gets one coherent
 version that `cargo`, the git tag, and `--version` all agree on, without
 per-package CI bookkeeping. Both satisfy the invariant (one repo-wide version,
 bare tags, no package name). Pick **one** model per repo and record the choice
-in the repo's `CLAUDE.md`. The named prerelease stages (`-testing-`/`-preview-`/
-`-release-`) and GA are hand-cut from `main` either way.
+in the repo's `CLAUDE.md`. The named stages (`-testing-`/`-preview-`) and the
+`-release` GA trigger are hand-cut from `main` either way.
 
-## GitHub Actions build workflow
+## GitHub Actions: version + develop-tag
 
-Drop this into every repo at `.github/workflows/build.yml`:
+Versioning contributes two jobs to a repo's build workflow: a `version` job that
+computes the version from the tag (or derives the next develop build on an
+untagged commit), and a `develop-tag` job that stamps the per-commit develop tag
+on `main`. **Publishing and channel routing are out of scope here** — that lives
+in the Distribution Standard's release workflow (`sm-release.yml`, which
+dispatches each tag to the right `sm-*` channel repo). For a workspace the
+develop tag comes from the bump helper, not CI (see the monorepo rule).
 
 ```yaml
 name: build
-
 on:
   push:
-    branches:
-      - main
-      - 'release/v[0-9]+.[0-9]+.x'
+    branches: [main, 'release/v[0-9]+.[0-9]+.x']
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'              # GA release  v0.1.1
-      - 'v[0-9]+.[0-9]+.[0-9]+-release-*'    # release RC  v0.1.1-release-001 (public, sm-get)
-      - 'v[0-9]+.[0-9]+.[0-9]+-preview-*'    # preview     v0.1.1-preview-001 (public, sm-get)
-      - 'v[0-9]+.[0-9]+.[0-9]+-testing-*'    # testing     v0.1.1-testing-001 (internal, sm-int)
-      - 'v[0-9]+.[0-9]+.[0-9]+-develop-*'    # dev build   v0.1.1-develop-001 (tag only, no Release)
+      - 'v[0-9]+.[0-9]+.[0-9]+-develop-*'   # dev build (tag only)
+      - 'v[0-9]+.[0-9]+.[0-9]+-testing-*'   # testing
+      - 'v[0-9]+.[0-9]+.[0-9]+-preview-*'   # preview
+      - 'v[0-9]+.[0-9]+.[0-9]+-release'     # GA trigger → published as vX.Y.Z
 
 jobs:
   version:
     runs-on: ubuntu-latest
     outputs:
-      version:       ${{ steps.v.outputs.version }}
-      is_tag:        ${{ steps.v.outputs.is_tag }}
-      is_ga:         ${{ steps.v.outputs.is_ga }}
-      is_prerelease: ${{ steps.v.outputs.is_prerelease }}
-      is_develop:    ${{ steps.v.outputs.is_develop }}
+      version: ${{ steps.v.outputs.version }}
+      stage:   ${{ steps.v.outputs.stage }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-
+        with: { fetch-depth: 0, fetch-tags: true }
       - id: v
         run: |
-          IS_TAG=false
-          IS_GA=false
-          IS_PRERELEASE=false
-          IS_DEVELOP=false
-
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-            IS_TAG=true
-            if [[ "$VERSION" == *-develop-* ]]; then
-              IS_DEVELOP=true            # dev tag: build only, no GitHub Release
-            elif [[ "$VERSION" == *-*-* ]]; then
-              IS_PRERELEASE=true         # testing / preview / release RC
-            else
-              IS_GA=true                 # clean vX.Y.Z
-            fi
+            TAG="${GITHUB_REF#refs/tags/}"
+            case "$TAG" in
+              *-develop-*) STAGE=develop; VERSION="$TAG" ;;
+              *-testing-*) STAGE=testing; VERSION="$TAG" ;;
+              *-preview-*) STAGE=preview; VERSION="$TAG" ;;
+              *-release)   STAGE=ga;      VERSION="${TAG%-release}" ;;
+              *) echo "::error::unrecognized version tag $TAG"; exit 1 ;;
+            esac
           else
-            # Untagged commit on a branch: derive the next develop build.
             source "$HOME/SimpleMotion/.claude/scripts/sm-version.sh"
-            VERSION="$(sm_version)"
+            VERSION="$(sm_version)"; STAGE=develop
           fi
+          { echo "version=$VERSION"; echo "stage=$STAGE"; } >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION stage=$STAGE"
 
-          {
-            echo "version=$VERSION"
-            echo "is_tag=$IS_TAG"
-            echo "is_ga=$IS_GA"
-            echo "is_prerelease=$IS_PRERELEASE"
-            echo "is_develop=$IS_DEVELOP"
-          } >> "$GITHUB_OUTPUT"
-          echo "Building $VERSION (tag=$IS_TAG ga=$IS_GA prerelease=$IS_PRERELEASE develop=$IS_DEVELOP)"
-
-  # On every commit to main (no tag yet), stamp the per-commit develop tag.
+  # Per-commit dev tag on main (single-binary repos; workspaces use the bump helper).
   develop-tag:
     needs: version
-    if: github.ref == 'refs/heads/main' && needs.version.outputs.is_tag == 'false'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: { contents: write }
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
+        with: { fetch-depth: 0, fetch-tags: true }
       - run: |
           V="${{ needs.version.outputs.version }}"
-          if git rev-parse -q --verify "refs/tags/$V" >/dev/null; then
-            echo "$V already tagged — nothing to do"
-          else
-            git tag -a "$V" -m "Dev build $V"
-            git push origin "$V"
-            echo "Tagged $V"
-          fi
-
-  # Publish a GitHub Release for GA + testing/preview/release tags (never for develop).
-  release:
-    needs: version
-    if: needs.version.outputs.is_ga == 'true' || needs.version.outputs.is_prerelease == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name:               ${{ needs.version.outputs.version }}
-          prerelease:             ${{ needs.version.outputs.is_prerelease }}
-          generate_release_notes: true
+          git rev-parse -q --verify "refs/tags/$V" >/dev/null && { echo "$V exists"; exit 0; }
+          git tag -a "$V" -m "Dev build $V" && git push origin "$V"
 ```
 
-Add `build` / `test` jobs as needed per repo; only the `version`, `develop-tag`, and `release` jobs are policy.
+Add `build` / `test` jobs per repo. **Publishing is the Distribution Standard's
+`sm-release.yml`** — it routes `-develop-`/`-testing-`/`-preview-`/`-release` tags
+to the `sm-*` channel repos. Do **not** add a local `gh-release` step here; it
+would bypass the channel split.
 
 ## Changelog format
 
@@ -349,7 +308,7 @@ Each repo's `CHANGE.md` is migrated as follows:
 
 A repo conforms to this policy when:
 
-- Tags matching `v[0-9]+.[0-9]+.[0-9]+(-(develop|testing|preview|release)-[0-9]{3})?` are the only version tags pushed. (Legacy `-cm-` / `-rc-` tags from before 2026-06-14 remain valid but no new ones are cut.)
+- Tags matching `v[0-9]+.[0-9]+.[0-9]+(-(develop|testing|preview)-[0-9]{3}|-release)?` are the only version tags pushed — i.e. `-develop-`/`-testing-`/`-preview-` carry a 3-digit `NNN`, and the GA trigger is the suffixless `-release`. (Legacy `-cm-` / `-rc-` / bare-`vX.Y.Z` GA tags from before 2026-06-15 remain valid but no new ones are cut.)
 - `CHANGE.md` carries the changelog table at the top and this policy appendix at the bottom, with legacy entries (if any) between them under a divider.
-- `.github/workflows/build.yml` either matches the template above or extends it without removing the `version`, `develop-tag`, and `release` jobs.
+- The repo's build workflow keeps the `version` + `develop-tag` jobs (publishing/channel routing lives in the Distribution Standard's `sm-release.yml`, not here).
 - No commit on `main` or a release branch is tagged with the retired `W.X.Y.Z` format.
