@@ -185,18 +185,24 @@ ASSET="${PACKAGE}-${SUFFIX}"
 #     may belong to a different package in the same repo.
 if [[ -z "$VERSION" ]]; then
     if [[ -n "$TAG_PREFIX" ]]; then
-        RELEASES_JSON=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases")
+        RELEASES_JSON=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" 2>/dev/null || true)
         TAG=$(awk -v prefix="$TAG_PREFIX" '
                   /"tag_name":/ {
                       if ($0 ~ ("\"" prefix)) { print $0; exit }
                   }' <<<"$RELEASES_JSON" \
               | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
     else
-        TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-              | awk -F'"' '/"tag_name":/ {print $4; exit}')
+        TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
+              | awk -F'"' '/"tag_name":/ {print $4; exit}' || true)
     fi
     if [[ -z "${TAG:-}" ]]; then
-        echo "No release available for $PACKAGE in $REPO (channel=$CHANNEL)" >&2
+        {
+            printf '\n  [x] No %s build of %s is published yet.\n' "$CHANNEL" "$PACKAGE"
+            printf '      (https://github.com/%s has no release to install.)\n\n' "$REPO"
+            printf '      Try another channel, e.g.:\n'
+            printf '        curl -fsSL https://install.simplemotion.com/sm-welcome.sh | bash -s -- --channel preview\n\n'
+            printf '      Or contact executive@simplemotion.com if you expected a %s build.\n\n' "$CHANNEL"
+        } >&2
         exit 1
     fi
 else
