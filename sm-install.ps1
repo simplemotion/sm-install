@@ -119,7 +119,15 @@ if (-not $Version) {
         $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -UseBasicParsing
         $picked = $releases | Where-Object { $_.tag_name.StartsWith($TagPrefix) } | Select-Object -First 1
         if (-not $picked) {
-            Write-Host "  [x] No release available for $Package in $Repo (channel=$Channel)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host ("  [x] No {0} build of {1} is published yet." -f $Channel, $Package) -ForegroundColor Red
+            Write-Host ("      (https://github.com/{0} has no release to install.)" -f $Repo)
+            Write-Host ""
+            Write-Host "      Try another channel, e.g.:"
+            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 | iex"
+            Write-Host ""
+            Write-Host "      Or contact executive@simplemotion.com if you expected a $Channel build."
+            Write-Host ""
             exit 1
         }
         $Version = $picked.tag_name
@@ -128,7 +136,15 @@ if (-not $Version) {
             $latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing
             $Version = $latest.tag_name
         } catch {
-            Write-Host "  [x] No release available for $Package in $Repo (channel=$Channel)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host ("  [x] No {0} build of {1} is published yet." -f $Channel, $Package) -ForegroundColor Red
+            Write-Host ("      (https://github.com/{0} has no release to install.)" -f $Repo)
+            Write-Host ""
+            Write-Host "      Try another channel, e.g.:"
+            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 | iex"
+            Write-Host ""
+            Write-Host "      Or contact executive@simplemotion.com if you expected a $Channel build."
+            Write-Host ""
             exit 1
         }
     }
