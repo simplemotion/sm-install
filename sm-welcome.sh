@@ -193,12 +193,15 @@ confirm_section "Section 2 of 3: sm-welcome"
 
 if [[ $SKIP_DOWNLOAD -eq 0 ]]; then
     INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")
-    bash -c "$INSTALL_SH" sm-install \
+    if ! bash -c "$INSTALL_SH" sm-install \
         --package sm-welcome \
         --asset-suffix short \
         --source-repo 3400-0000-SM-Software/3400-0009-SM-Welcome \
         --mode install \
-        ${CHANNEL_ARG[@]+"${CHANNEL_ARG[@]}"}
+        ${CHANNEL_ARG[@]+"${CHANNEL_ARG[@]}"}; then
+        printf '\n  [x] sm-welcome could not be installed from the %s channel (see the message above).\n\n' "${CHANNEL_VAL}" >&2
+        exit 1
+    fi
 fi
 
 # ── Section 3: Launch ─────────────────────────────────────────────────

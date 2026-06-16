@@ -285,6 +285,12 @@ if (-not $skipDownload) {
           -SourceRepo '3400-0000-SM-Software/3400-0009-SM-Welcome' `
           -Channel $channel `
           -Mode 'install'
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host ("  [x] sm-welcome could not be installed from the {0} channel (see the message above)." -f $channel) -ForegroundColor Red
+        Write-Host ""
+        exit 1
+    }
 }
 
 # ── Section 3: Launch ─────────────────────────────────────────────────
