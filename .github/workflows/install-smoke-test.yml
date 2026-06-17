@@ -41,20 +41,9 @@ jobs:
           if (-not ($log -join "`n" | Select-String -Quiet 'Provenance verified')) { throw 'provenance NOT verified' }
           & (Join-Path $HOME '.simplemotion/bin/sm-welcome.exe') -V
           if ($LASTEXITCODE -ne 0) { throw "binary -V exit $LASTEXITCODE" }
-
-  windows-ps51:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install + verify (Windows PowerShell 5.1)
-        shell: powershell
-        run: |
-          $log = & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install *>&1
-          $log | ForEach-Object { Write-Host $_ }
-          if ($LASTEXITCODE -ne 0) { throw "installer exit $LASTEXITCODE" }
-          if (-not ($log -join "`n" | Select-String -Quiet 'Provenance verified')) { throw 'provenance NOT verified' }
-          & (Join-Path $HOME '.simplemotion/bin/sm-welcome.exe') -V
-          if ($LASTEXITCODE -ne 0) { throw "binary -V exit $LASTEXITCODE" }
+          # NOTE: pwsh 7 only. Windows PowerShell 5.1 reads BOM-less files as the
+          # ANSI codepage and can't parse the UTF-8 glyphs in these scripts, so
+          # 5.1 is intentionally unsupported — no 5.1 job here.
 
   unix:
     strategy:
