@@ -115,6 +115,11 @@ function Install-PwshPortable {
         Remove-TreeForcefully $LocalPwshDir
         New-Item -ItemType Directory -Path $LocalPwshDir -Force | Out-Null
         Expand-Archive -Path $tmp -DestinationPath $LocalPwshDir -Force
+    } catch {
+        # Degrade gracefully (matches Install-Cosign): a failed download or
+        # unpack must not abort the whole bootstrap with a raw exception.
+        Write-Host ("  [!] PowerShell 7 install failed: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        return $null
     } finally {
         Remove-Item $tmp -ErrorAction SilentlyContinue
     }
@@ -148,6 +153,11 @@ function Install-GitPortable {
             Write-Host ("  [!] PortableGit extractor exited {0}" -f $proc.ExitCode) -ForegroundColor Yellow
             return $null
         }
+    } catch {
+        # Degrade gracefully (matches Install-Cosign): a failed download or
+        # extract must not abort the whole bootstrap with a raw exception.
+        Write-Host ("  [!] Git install failed: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        return $null
     } finally {
         Remove-Item $tmp -ErrorAction SilentlyContinue
     }
