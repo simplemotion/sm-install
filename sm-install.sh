@@ -61,6 +61,10 @@
 #                                with "sm-") or ~/.local/bin (otherwise).
 #                                SimpleMotion CLIs share a dedicated dir;
 #                                third-party packages use the XDG default.
+#                                The verified binary itself is stored per
+#                                channel at ~/.simplemotion/share/<package>/
+#                                sm-<channel>/<package>; the install dir holds
+#                                a symlink to the active channel's copy.
 #   --version TAG                Pin a specific tag, skipping channel
 #                                resolution.
 #   --                           End of flag parsing; remaining args are
@@ -362,10 +366,18 @@ EOF
 }
 
 install_to_dir() {
-    mkdir -p "$INSTALL_DIR"
-    install -m 0755 "$TMPBIN" "${INSTALL_DIR}/${PACKAGE}"
+    # Per-channel local store (latest-only): the verified binary is kept at
+    # ~/.simplemotion/share/<package>/sm-<channel>/<package>, one current
+    # binary per channel. The install dir holds a SYMLINK to the active
+    # channel's copy, so re-installing from a different channel just re-points
+    # the link (the store is the source of truth). --install-dir / SM_INSTALL_DIR
+    # still choose where the symlink lives; the store path is fixed.
+    local store_dir="$HOME/.simplemotion/share/${PACKAGE}/sm-${CHANNEL}"
+    mkdir -p "$store_dir" "$INSTALL_DIR"
+    install -m 0755 "$TMPBIN" "${store_dir}/${PACKAGE}"
+    ln -sfn "${store_dir}/${PACKAGE}" "${INSTALL_DIR}/${PACKAGE}"
     write_receipt "$PACKAGE" "$CHANNEL" "$TAG" "$SOURCE_REPO" "$actual"
-    printf '  [%s✓%s] %s Installed %s to %s/%s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$PACKAGE" "$INSTALL_DIR" "$PACKAGE"
+    printf '  [%s✓%s] %s Installed %s %s to %s, linked %s/%s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$PACKAGE" "$TAG" "$store_dir" "$INSTALL_DIR" "$PACKAGE"
     case ":$PATH:" in
         *":$INSTALL_DIR:"*) ;;
         *) printf '  [%s!%s] %s is not on $PATH — add it to your shell init to run %s directly\n' "$DIM" "$RESET" "$INSTALL_DIR" "$PACKAGE" ;;

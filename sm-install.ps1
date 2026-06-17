@@ -30,7 +30,12 @@
 #                                Default: install.
 #   -InstallDir PATH             install mode only. Resolution order:
 #                                -InstallDir > $env:SM_INSTALL_DIR >
-#                                ~/.simplemotion/bin.
+#                                ~/.simplemotion/bin. The verified binary is
+#                                stored per channel at ~/.simplemotion/share/
+#                                <package>/sm-<channel>/<package>.exe; the
+#                                install dir holds a symlink to the active
+#                                channel's copy (a plain copy where Windows
+#                                symlink privilege is unavailable).
 #   -Version TAG                 Pin a specific tag.
 #   -Channel release|preview     Default: $env:SM_CHANNEL or 'release'.
 #   -AssetSuffix triple|short    Asset-name suffix style:
@@ -290,17 +295,34 @@ function Install-Binary {
     if (-not (Test-Path $InstallDir)) {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
+    # Per-channel local store (latest-only): the verified binary is kept at
+    # ~/.simplemotion/share/<package>/sm-<channel>/<package>.exe, one current
+    # binary per channel. The install dir holds a SYMLINK to the active
+    # channel's copy where the OS allows it (Developer Mode / elevated); on
+    # stock Windows without that privilege we fall back to a plain copy. The
+    # store is the source of truth either way.
+    $storeDir = Join-Path $HOME ".simplemotion\share\$Package\sm-$Channel"
+    if (-not (Test-Path $storeDir)) {
+        New-Item -ItemType Directory -Path $storeDir -Force | Out-Null
+    }
+    $storeBin = Join-Path $storeDir "$Package.exe"
+    Move-Item -Path $tmpBin -Destination $storeBin -Force
+
     $dest = Join-Path $InstallDir "$Package.exe"
     # Defensive: an earlier sm-welcome.ps1 bug (case-insensitive $LocalBin
     # collision) could leave a *directory* at this path containing other
-    # tool binaries. Move-Item -Force can't replace a non-empty dir with
-    # a file, so wipe stale directories before placing the binary.
-    if ((Test-Path $dest) -and (Get-Item $dest).PSIsContainer) {
-        Remove-Item $dest -Recurse -Force
+    # tool binaries; wipe any stale dir/file before re-linking.
+    if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+    $linked = $false
+    try {
+        New-Item -ItemType SymbolicLink -Path $dest -Target $storeBin -ErrorAction Stop | Out-Null
+        $linked = $true
+    } catch {
+        Copy-Item -Path $storeBin -Destination $dest -Force
     }
-    Move-Item -Path $tmpBin -Destination $dest -Force
     Write-InstallReceipt -Pkg $Package -Channel $Channel -Tag $Version -SourceRepo $SourceRepo -Sha $actual
-    Write-Host ("  [v] {0} Installed {1} to {2}" -f (Format-Step 5), $Package, $dest) -ForegroundColor Green
+    $how = if ($linked) { "linked" } else { "copied" }
+    Write-Host ("  [v] {0} Installed {1} {2} to {3}, {4} {5}" -f (Format-Step 5), $Package, $Version, $storeBin, $how, $dest) -ForegroundColor Green
 
     $pathDirs = $env:PATH -split ';'
     if ($pathDirs -notcontains $InstallDir) {
