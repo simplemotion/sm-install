@@ -241,25 +241,32 @@ if ($cosignPath) {
 $env:PATH = "$LocalBinDir;$LocalPwshDir;$(Join-Path $LocalGitDir 'cmd');$env:PATH"
 
 # ── Section 2: sm-welcome ─────────────────────────────────────────────
-# Fast-path resolution: if the binary is already on disk, ask the channel
-# repo for the latest tag. If they match, skip the download entirely.
+# Fast-path resolution — channel-aware. The per-channel store
+# (~/.simplemotion/share/sm-welcome/sm-<channel>/sm-welcome.exe) holds the
+# binary we last installed for THIS channel. If its version already matches
+# the channel's latest release, skip the download — and re-point the
+# ~/.simplemotion/bin link at it, so a channel *switch* still takes effect
+# without a download. We check the channel's own stored binary (not the
+# bin/ link, which may currently point at a different channel).
 $skipDownload = $false
 $localVer  = $null
 $latestVer = $null
-if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
+$channelRepo  = $null
+$storeChannel = $null
+switch ($channel) {
+    'release' { $channelRepo = 'simplemotion/sm-release'; $storeChannel = 'release' }
+    'preview' { $channelRepo = 'simplemotion/sm-preview'; $storeChannel = 'preview' }
+    'develop' { $channelRepo = 'simplemotion/sm-develop'; $storeChannel = 'develop' }
+    'testing' { $channelRepo = 'simplemotion/sm-testing'; $storeChannel = 'testing' }
+    'private' { $channelRepo = 'simplemotion/sm-develop'; $storeChannel = 'develop' }   # legacy alias for develop
+}
+$storeBin = if ($storeChannel) { Join-Path $HOME (".simplemotion\share\sm-welcome\sm-{0}\sm-welcome.exe" -f $storeChannel) } else { $null }
+if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and $storeBin -and (Test-Path $storeBin)) {
     try {
-        $verOut = (& $localBin -V 2>$null) -join ''
+        $verOut = (& $storeBin -V 2>$null) -join ''
         if ($verOut -match '^\s*sm-welcome\s+v?(\S+)') { $localVer = $matches[1] }
     } catch { $localVer = $null }
 
-    $channelRepo = $null
-    switch ($channel) {
-        'release' { $channelRepo = 'simplemotion/sm-release' }
-        'preview' { $channelRepo = 'simplemotion/sm-preview' }
-        'develop' { $channelRepo = 'simplemotion/sm-develop' }
-        'testing' { $channelRepo = 'simplemotion/sm-testing' }
-        'private' { $channelRepo = 'simplemotion/sm-develop' }   # legacy alias for develop
-    }
     if ($channelRepo) {
         try {
             $latest = Invoke-RestMethod -Uri ("https://api.github.com/repos/{0}/releases/latest" -f $channelRepo) -UseBasicParsing
@@ -271,6 +278,12 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and (Test-Path $localBin)) {
         } catch { $latestVer = $null }
     }
     if ($localVer -and $latestVer -and $localVer -eq $latestVer) {
+        # Already have this channel's latest — re-point the active link
+        # (cheap) so switching channels takes effect without a re-download.
+        if (-not (Test-Path $installDir)) { New-Item -ItemType Directory -Path $installDir -Force | Out-Null }
+        if (Test-Path $localBin) { Remove-Item $localBin -Recurse -Force }
+        try { New-Item -ItemType SymbolicLink -Path $localBin -Target $storeBin -ErrorAction Stop | Out-Null }
+        catch { Copy-Item -Path $storeBin -Destination $localBin -Force }
         $skipDownload = $true
     }
 }
