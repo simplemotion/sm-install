@@ -63,10 +63,62 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Stock Windows PowerShell 5.1 negotiates TLS 1.0/1.1 by default, which GitHub
-# and our Pages host reject — every WebClient/IWR/IRM call below would fail. Add
+# and our Pages host reject - every WebClient/IWR/IRM call below would fail. Add
 # TLS 1.2 to whatever's already enabled (preserving 1.3 where present). No-op on
 # PowerShell 7 (already negotiates 1.2/1.3).
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+# --- PowerShell 7 guard (must stay ASCII so Windows PowerShell 5.1 can parse
+# the whole file before running this check). On 5.1, locate pwsh 7 (installing
+# a portable copy into ~/.local/bin if absent) and relaunch THIS script under
+# it, forwarding the same parameters. ---
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    $pwsh = Join-Path $HOME '.local\bin\pwsh-7\pwsh.exe'
+    if (-not (Test-Path $pwsh)) {
+        $found = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) { $pwsh = $found.Source }
+    }
+    if (-not (Test-Path $pwsh)) {
+        Write-Host "  [*] Installing PowerShell 7 (portable) to run the installer..."
+        $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+        $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' -UseBasicParsing
+        $ver = $rel.tag_name.TrimStart('v')
+        $asset = $rel.assets | Where-Object { $_.name -eq "PowerShell-$ver-win-$arch.zip" } | Select-Object -First 1
+        if (-not $asset) { Write-Host "  [x] No PowerShell 7 release asset for win-$arch." -ForegroundColor Red; exit 1 }
+        $zip = Join-Path $env:TEMP ("pwsh-{0}.zip" -f ([Guid]::NewGuid().ToString('N')))
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
+        $want = ($asset.digest -replace '^sha256:', '').ToLower()
+        $got  = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLower()
+        if ($want -and $want -ne $got) { Remove-Item $zip -Force -ErrorAction SilentlyContinue; Write-Host "  [x] PowerShell 7 SHA256 mismatch." -ForegroundColor Red; exit 1 }
+        $pwshDir = Join-Path $HOME '.local\bin\pwsh-7'
+        if (Test-Path $pwshDir) { Remove-Item $pwshDir -Recurse -Force }
+        New-Item -ItemType Directory -Path $pwshDir -Force | Out-Null
+        Expand-Archive -Path $zip -DestinationPath $pwshDir -Force
+        Remove-Item $zip -Force -ErrorAction SilentlyContinue
+        $pwsh = Join-Path $pwshDir 'pwsh.exe'
+    }
+    # Re-run this script under pwsh 7. Use the on-disk file if invoked from one;
+    # otherwise (iex of a download) materialize it to a temp file first.
+    $self = $PSCommandPath
+    if (-not $self) {
+        $self = Join-Path $env:TEMP ("sm-install-{0}.ps1" -f ([Guid]::NewGuid().ToString('N')))
+        (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1') | Set-Content -LiteralPath $self -Encoding UTF8
+    }
+    $fwd = @()
+    foreach ($k in $PSBoundParameters.Keys) {
+        $val = $PSBoundParameters[$k]
+        if ($val -is [System.Management.Automation.SwitchParameter] -or $val -is [bool]) {
+            if ($val) { $fwd += "-$k" }
+        } elseif ($val -is [System.Array]) {
+            foreach ($item in $val) { $fwd += "-$k"; $fwd += [string]$item }
+        } else {
+            $fwd += "-$k"; $fwd += [string]$val
+        }
+    }
+    Write-Host "  [*] Relaunching under PowerShell 7..."
+    & $pwsh -NoProfile -File $self @fwd
+    exit $LASTEXITCODE
+}
 
 # Source the shared install-toolchain library (Confirm-Section,
 # Get-LatestRelease, Confirm-AssetDigest, Remove-TreeForcefully,
@@ -88,7 +140,7 @@ if ($Channel -eq 'private') {
     Write-Host "  [!] channel 'private' is now 'develop'; continuing as develop" -ForegroundColor Yellow
     $Channel = 'develop'
 }
-# Channel → repo defaulting. Each channel maps to its own GitHub repo.
+# Channel -> repo defaulting. Each channel maps to its own GitHub repo.
 if (-not $Repo) { $Repo = "simplemotion/sm-$Channel" }
 if (-not $SourceRepo) { $SourceRepo = $Repo }
 if (-not $InstallDir) {
@@ -113,7 +165,7 @@ $target = "$arch-pc-windows-msvc"
 $suffix = if ($AssetSuffix -eq 'short') { "win-$archShort" } else { $target }
 $asset  = "$Package-$suffix.exe"
 
-# Step numbering — matches sm-welcome's `[NN/TOTAL]` counter so the
+# Step numbering - matches sm-welcome's `[NN/TOTAL]` counter so the
 # Download phase and the binary's onboarding steps read as one
 # continuous numbered sequence (01..TOTAL). Defaults to 20 (= 5
 # download-phase steps + 15 onboarding steps).
@@ -166,11 +218,11 @@ $url = "https://github.com/$Repo/releases/download/$Version/$asset"
 $tmpBin = [System.IO.Path]::Combine($env:TEMP, "$Package-$([Guid]::NewGuid().ToString('N')).exe")
 $tmpSum = "$tmpBin.sha256"
 
-# Phase header — matches sm-welcome's `phase_header` formatting so the
+# Phase header - matches sm-welcome's `phase_header` formatting so the
 # download output frames as one continuous workflow. Rule width is
 # 36 - len("Download") = 28 dashes (same formula as the Rust side).
 Write-Host ""
-Write-Host "  ── Download ────────────────────────────"
+Write-Host "  -- Download ----------------------------"
 Write-Host ("  [+] {0} Platform: {1} (channel={2}, tag={3})" -f (Format-Step 1), $target, $Channel, $Version)
 
 # Download binary.
@@ -200,7 +252,7 @@ if ($expected -ne $actual) {
 }
 Write-Host ("  [v] {0} Checksum verified (SHA256: {1})" -f (Format-Step 3), $actual) -ForegroundColor Green
 
-# Attestation check — cosign-only. Verification of GitHub-issued
+# Attestation check - cosign-only. Verification of GitHub-issued
 # attestations needs cosign pointed at GitHub's private Sigstore TUF
 # (sm-welcome.ps1 ran `cosign initialize --mirror https://tuf-repo.github.com`
 # into $env:TUF_ROOT during Section 1) plus the GH-Sigstore-shaped flag
@@ -225,7 +277,7 @@ if (-not $env:TUF_ROOT) { $env:TUF_ROOT = Join-Path $HOME '.simplemotion\sigstor
 # Both Install-Cosign and Initialize-CosignTuf come from sm-install-lib.ps1.
 $cosignBin = Find-Cosign
 if ($bundleOk -and -not $cosignBin) {
-    Write-Host ("      [*] cosign not on disk — bootstrapping...") -ForegroundColor DarkGray
+    Write-Host ("      [*] cosign not on disk - bootstrapping...") -ForegroundColor DarkGray
     $cosignBin = Install-Cosign
     if ($cosignBin) {
         Initialize-CosignTuf $cosignBin | Out-Null
@@ -233,7 +285,7 @@ if ($bundleOk -and -not $cosignBin) {
 }
 if ($bundleOk -and $cosignBin) {
     # Attestations are signed by the canonical sm-ci REUSABLE workflow, so the
-    # cert SAN is sm-ci's ref — NOT the source repo's. Pin the identity to sm-ci
+    # cert SAN is sm-ci's ref - NOT the source repo's. Pin the identity to sm-ci
     # and bind the source repo separately via the workflow-repository claim.
     # (Pinning the source repo AS the identity, the old behaviour, never matched
     # and always rejected the bundle.)
@@ -281,7 +333,7 @@ function Write-InstallReceipt {
     try {
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     } catch {
-        Write-Host "  [!] could not create $dir — receipt skipped" -ForegroundColor DarkGray
+        Write-Host "  [!] could not create $dir - receipt skipped" -ForegroundColor DarkGray
         return
     }
     $file = Join-Path $dir "$Pkg.toml"
@@ -299,7 +351,7 @@ installer    = "sm-install.ps1"
     try {
         Set-Content -Path $file -Value $body -Encoding UTF8
     } catch {
-        Write-Host "  [!] could not write $file — receipt skipped" -ForegroundColor DarkGray
+        Write-Host "  [!] could not write $file - receipt skipped" -ForegroundColor DarkGray
     }
 }
 
@@ -338,7 +390,7 @@ function Install-Binary {
 
     $pathDirs = $env:PATH -split ';'
     if ($pathDirs -notcontains $InstallDir) {
-        Write-Host "  [!] $InstallDir is not on `$env:PATH — add it to your profile to run $Package directly" -ForegroundColor DarkGray
+        Write-Host "  [!] $InstallDir is not on `$env:PATH - add it to your profile to run $Package directly" -ForegroundColor DarkGray
     }
     return $dest
 }

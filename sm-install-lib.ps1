@@ -22,7 +22,7 @@
 #                         /s /q` first, then a clear-attributes + retry
 #                         fallback.
 #   Find-Cosign           Probe ~/.local/bin/cosign.exe and nothing
-#                         else (100%-local toolchain rule — system-wide
+#                         else (100%-local toolchain rule - system-wide
 #                         cosigns are deliberately ignored).
 #   Install-Cosign        Download cosign-windows-amd64.exe from
 #                         sigstore/cosign /releases/latest, SHA256-
@@ -37,7 +37,7 @@
 
 function Confirm-Section($title) {
     Write-Host ""
-    Write-Host ("  ── {0} {1}" -f $title, ('─' * [Math]::Max(0, 56 - $title.Length)))
+    Write-Host ("  -- {0} {1}" -f $title, ('-' * [Math]::Max(0, 56 - $title.Length)))
     if ($env:SM_WELCOME_ASSUME_YES) {
         Write-Host "  [+] Proceeding (SM_WELCOME_ASSUME_YES set)" -ForegroundColor DarkGray
         return

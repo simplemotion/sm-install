@@ -41,9 +41,24 @@ jobs:
           if (-not ($log -join "`n" | Select-String -Quiet 'Provenance verified')) { throw 'provenance NOT verified' }
           & (Join-Path $HOME '.simplemotion/bin/sm-welcome.exe') -V
           if ($LASTEXITCODE -ne 0) { throw "binary -V exit $LASTEXITCODE" }
-          # NOTE: pwsh 7 only. Windows PowerShell 5.1 reads BOM-less files as the
-          # ANSI codepage and can't parse the UTF-8 glyphs in these scripts, so
-          # 5.1 is intentionally unsupported — no 5.1 job here.
+
+  windows-ps51:
+    # Starts under Windows PowerShell 5.1; the ASCII pwsh-7 guard should find
+    # pwsh 7 (preinstalled on the runner) and relaunch the install under it.
+    # Assert via exit code + installed binary (the relaunch crosses a process
+    # boundary, so the child's Write-Host output isn't captured here).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install (start in Windows PowerShell 5.1, relaunch to pwsh 7)
+        shell: powershell
+        run: |
+          & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install
+          if ($LASTEXITCODE -ne 0) { throw "installer exit $LASTEXITCODE" }
+          $bin = Join-Path $HOME '.simplemotion/bin/sm-welcome.exe'
+          if (-not (Test-Path $bin)) { throw "sm-welcome.exe not installed at $bin" }
+          & $bin -V
+          if ($LASTEXITCODE -ne 0) { throw "binary -V exit $LASTEXITCODE" }
 
   unix:
     strategy:
