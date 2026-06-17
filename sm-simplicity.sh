@@ -12,6 +12,12 @@
 
 set -euo pipefail
 
+# Match the Windows TLS pin (sm-*.ps1's SecurityProtocol): force a TLS 1.2
+# floor on every curl in this process — including the installer fetched below.
+# curl on macOS/Linux already negotiates 1.2/1.3, so this is defensive
+# (rejects ancient TLS / downgrade). `command` avoids recursing into itself.
+curl() { command curl --tlsv1.2 "$@"; }
+
 printf '\n  SimpleMotion — Simplicity Installer\n  ═══════════════════════════════════\n\n'
 
 INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")
