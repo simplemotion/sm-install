@@ -314,7 +314,12 @@ if curl -fsSL "${URL}.sigstore.jsonl" -o "$TMPATT" 2>/dev/null; then
     fi
 fi
 if [[ -s "$TMPATT" ]] && [[ -n "$COSIGN_BIN" ]]; then
-    cert_id_regex="https://github.com/${SOURCE_REPO}/\.github/workflows/.*"
+    # Attestations are signed by the canonical sm-ci REUSABLE workflow, so the
+    # cert SAN is sm-ci's ref — NOT the source repo's. Pin the identity to sm-ci
+    # and bind the source repo separately via the workflow-repository claim.
+    # (Pinning the source repo AS the identity, the old behaviour, never matched
+    # and always rejected the bundle.)
+    cert_id_regex="https://github.com/simplemotion/sm-ci/\.github/workflows/sm-ci\.yml@.*"
     if "$COSIGN_BIN" verify-blob-attestation \
         --bundle "$TMPATT" \
         --new-bundle-format \
@@ -323,9 +328,10 @@ if [[ -s "$TMPATT" ]] && [[ -n "$COSIGN_BIN" ]]; then
         --insecure-ignore-sct \
         --type slsaprovenance1 \
         --certificate-identity-regexp "$cert_id_regex" \
+        --certificate-github-workflow-repository "$SOURCE_REPO" \
         --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
         "$TMPBIN" >/dev/null 2>&1; then
-        printf '  [%s✓%s] %s Provenance verified (cosign, signed by %s)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO"
+        printf '  [%s✓%s] %s Provenance verified (cosign; built from %s via sm-ci)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO"
     else
         printf '  [%s✗%s] %s Provenance verification failed (cosign rejected the bundle)\n' "$RED" "$RESET" "$(fmt_step 4)" >&2
         exit 1
