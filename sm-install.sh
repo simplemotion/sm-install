@@ -78,6 +78,20 @@ set -euo pipefail
 # (rejects ancient TLS / downgrade). `command` avoids recursing into itself.
 curl() { command curl --tlsv1.2 "$@"; }
 
+# Authenticate api.github.com requests when a token is present (GH_TOKEN or
+# GITHUB_TOKEN). Lifts the 60/hr unauthenticated rate limit that bites on
+# shared CI / corporate-NAT IPs. curl strips the Authorization header on a
+# cross-host redirect, so it's safe even though release-asset downloads
+# redirect off api.github.com. Use ONLY for api.github.com calls.
+SM_GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+gh_api() {
+    if [ -n "$SM_GH_TOKEN" ]; then
+        curl -fsSL -H "Authorization: Bearer $SM_GH_TOKEN" -H "X-GitHub-Api-Version: 2022-11-28" "$@"
+    else
+        curl -fsSL "$@"
+    fi
+}
+
 # Source the shared install-toolchain library (confirm_section,
 # find_cosign, ensure_cosign, initialize_cosign_tuf). sm-welcome.sh
 # loads the same lib at startup, so functions are consistent across
@@ -195,14 +209,14 @@ ASSET="${PACKAGE}-${SUFFIX}"
 #     may belong to a different package in the same repo.
 if [[ -z "$VERSION" ]]; then
     if [[ -n "$TAG_PREFIX" ]]; then
-        RELEASES_JSON=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" 2>/dev/null || true)
+        RELEASES_JSON=$(gh_api "https://api.github.com/repos/${REPO}/releases" 2>/dev/null || true)
         TAG=$(awk -v prefix="$TAG_PREFIX" '
                   /"tag_name":/ {
                       if ($0 ~ ("\"" prefix)) { print $0; exit }
                   }' <<<"$RELEASES_JSON" \
               | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
     else
-        TAG=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
+        TAG=$(gh_api "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
               | awk -F'"' '/"tag_name":/ {print $4; exit}' || true)
     fi
     if [[ -z "${TAG:-}" ]]; then

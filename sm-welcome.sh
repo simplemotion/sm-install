@@ -44,6 +44,19 @@ set -euo pipefail
 # (rejects ancient TLS / downgrade). `command` avoids recursing into itself.
 curl() { command curl --tlsv1.2 "$@"; }
 
+# Authenticate api.github.com requests when a token is present (GH_TOKEN or
+# GITHUB_TOKEN). Lifts the 60/hr unauthenticated rate limit on shared CI /
+# corporate-NAT IPs. curl strips the Authorization header on a cross-host
+# redirect, so it's safe. Use ONLY for api.github.com calls.
+SM_GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+gh_api() {
+    if [ -n "$SM_GH_TOKEN" ]; then
+        curl -fsSL -H "Authorization: Bearer $SM_GH_TOKEN" -H "X-GitHub-Api-Version: 2022-11-28" "$@"
+    else
+        curl -fsSL "$@"
+    fi
+}
+
 # Per-SimpleMotion TUF cache so we don't clobber any existing public-good
 # Sigstore trust under ~/.sigstore. Exported so sm-install.sh picks it up.
 export TUF_ROOT="${TUF_ROOT:-$HOME/.simplemotion/sigstore}"
@@ -190,7 +203,7 @@ esac
 STORE_BIN="$HOME/.simplemotion/share/sm-welcome/sm-${STORE_CHANNEL}/sm-welcome"
 if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -n "$STORE_CHANNEL" && -x "$STORE_BIN" ]]; then
     LOCAL_VER=$("$STORE_BIN" -V 2>/dev/null | awk '{print $2}' | sed 's/^v//')
-    LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/${CHANNEL_REPO}/releases/latest" 2>/dev/null \
+    LATEST_TAG=$(gh_api "https://api.github.com/repos/${CHANNEL_REPO}/releases/latest" 2>/dev/null \
         | awk -F'"' '/"tag_name":/ {print $4; exit}' || true)
     LATEST_VER="${LATEST_TAG#v}"
     if [[ -n "$LOCAL_VER" && -n "$LATEST_VER" && "$LOCAL_VER" == "$LATEST_VER" ]]; then
