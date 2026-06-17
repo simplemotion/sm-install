@@ -166,25 +166,32 @@ if [[ -n "${COSIGN_BIN:-}" ]]; then
 fi
 
 # ── Section 2: sm-welcome ─────────────────────────────────────────────
-# Fast-path resolution: if the binary is already on disk, ask the channel
-# repo for the latest tag. If they match, skip the download entirely.
+# Fast-path resolution — channel-aware. The per-channel store
+# (~/.simplemotion/share/sm-welcome/sm-<channel>/sm-welcome) holds the binary
+# we last installed for THIS channel. If its version already matches the
+# channel's latest release, skip the download — and re-point the
+# ~/.simplemotion/bin symlink at it, so a channel *switch* still takes effect
+# without a download. We check the channel's own stored binary (not the
+# bin/ symlink, which may currently point at a different channel).
 SKIP_DOWNLOAD=0
 LOCAL_VER=""
 LATEST_VER=""
-if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -x "$LOCAL_BIN" ]]; then
-    LOCAL_VER=$("$LOCAL_BIN" -V 2>/dev/null | awk '{print $2}' | sed 's/^v//')
-    case "$CHANNEL_VAL" in
-        release|preview|develop|testing) CHANNEL_REPO="simplemotion/sm-${CHANNEL_VAL}" ;;
-        private) CHANNEL_REPO="simplemotion/sm-develop" ;;   # legacy alias for develop
-        *) CHANNEL_REPO="" ;;
-    esac
-    LATEST_TAG=""
-    if [[ -n "$CHANNEL_REPO" ]]; then
-        LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/${CHANNEL_REPO}/releases/latest" 2>/dev/null \
-            | awk -F'"' '/"tag_name":/ {print $4; exit}' || true)
-    fi
+case "$CHANNEL_VAL" in
+    release|preview|develop|testing) CHANNEL_REPO="simplemotion/sm-${CHANNEL_VAL}"; STORE_CHANNEL="$CHANNEL_VAL" ;;
+    private) CHANNEL_REPO="simplemotion/sm-develop"; STORE_CHANNEL="develop" ;;   # legacy alias for develop
+    *) CHANNEL_REPO=""; STORE_CHANNEL="" ;;
+esac
+STORE_BIN="$HOME/.simplemotion/share/sm-welcome/sm-${STORE_CHANNEL}/sm-welcome"
+if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -n "$STORE_CHANNEL" && -x "$STORE_BIN" ]]; then
+    LOCAL_VER=$("$STORE_BIN" -V 2>/dev/null | awk '{print $2}' | sed 's/^v//')
+    LATEST_TAG=$(curl -fsSL "https://api.github.com/repos/${CHANNEL_REPO}/releases/latest" 2>/dev/null \
+        | awk -F'"' '/"tag_name":/ {print $4; exit}' || true)
     LATEST_VER="${LATEST_TAG#v}"
     if [[ -n "$LOCAL_VER" && -n "$LATEST_VER" && "$LOCAL_VER" == "$LATEST_VER" ]]; then
+        # Already have this channel's latest — re-point the active symlink
+        # (cheap) so switching channels takes effect without a re-download.
+        mkdir -p "$INSTALL_DIR"
+        ln -sfn "$STORE_BIN" "$LOCAL_BIN"
         SKIP_DOWNLOAD=1
     fi
 fi
