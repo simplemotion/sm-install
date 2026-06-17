@@ -1,5 +1,5 @@
 # SimpleMotion onboarding bootstrap (Windows).
-# Thin wrapper around sm-install.ps1 — fetches sm-welcome and execs it.
+# Thin wrapper around sm-install.ps1 - fetches sm-welcome and execs it.
 #
 # Usage:
 #   irm https://install.simplemotion.com/sm-welcome.ps1 | iex
@@ -14,18 +14,18 @@
 #
 # Three interactive sections, each gated by a Y/n prompt and prefaced by
 # a splash explaining the section in detail:
-#   1. Prerequisites — install PowerShell 7, Git, and cosign into
+#   1. Prerequisites - install PowerShell 7, Git, and cosign into
 #                      ~/.local/bin via direct GitHub-release downloads
 #                      (SHA256-verified against the API-published asset
 #                      digests), then initialize cosign's TUF trust
 #                      against GitHub's Sigstore (`tuf-repo.github.com`)
 #                      so it can verify GitHub-issued attestations
 #                      natively. No winget, no MSI, no sudo, no gh.
-#   2. sm-welcome    — download sm-welcome.exe from the selected channel,
+#   2. sm-welcome    - download sm-welcome.exe from the selected channel,
 #                      verify SHA256 + sigstore build-provenance with
 #                      cosign, then install. Fast-paths if the local
 #                      copy is already at the latest tag.
-#   3. Launch        — exec sm-welcome.exe in a fresh pwsh 7 console
+#   3. Launch        - exec sm-welcome.exe in a fresh pwsh 7 console
 #                      (using ~/.local/bin/pwsh-7/pwsh.exe) so the user
 #                      lands in the modern shell going forward.
 #
@@ -41,14 +41,49 @@
 $ErrorActionPreference = 'Stop'
 
 # Stock Windows PowerShell 5.1 negotiates TLS 1.0/1.1 by default, which GitHub
-# and our Pages host reject — every WebClient/IWR/IRM call below would fail. Add
+# and our Pages host reject - every WebClient/IWR/IRM call below would fail. Add
 # TLS 1.2 to whatever's already enabled (preserving 1.3 where present). No-op on
 # PowerShell 7 (already negotiates 1.2/1.3).
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
+# --- PowerShell 7 guard (must stay ASCII so Windows PowerShell 5.1 can parse
+# the whole file - PS parses before it runs, so any non-ASCII here would abort
+# 5.1 before this check). The SimpleMotion toolchain targets pwsh 7; on 5.1 we
+# locate pwsh 7 (installing a portable copy into ~/.local/bin if absent) and
+# relaunch under it. ---
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    $pwsh = Join-Path $HOME '.local\bin\pwsh-7\pwsh.exe'
+    if (-not (Test-Path $pwsh)) {
+        $found = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) { $pwsh = $found.Source }
+    }
+    if (-not (Test-Path $pwsh)) {
+        Write-Host "  [*] Installing PowerShell 7 (portable) to run the installer..."
+        $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+        $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' -UseBasicParsing
+        $ver = $rel.tag_name.TrimStart('v')
+        $asset = $rel.assets | Where-Object { $_.name -eq "PowerShell-$ver-win-$arch.zip" } | Select-Object -First 1
+        if (-not $asset) { Write-Host "  [x] No PowerShell 7 release asset for win-$arch." -ForegroundColor Red; exit 1 }
+        $zip = Join-Path $env:TEMP ("pwsh-{0}.zip" -f ([Guid]::NewGuid().ToString('N')))
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
+        $want = ($asset.digest -replace '^sha256:', '').ToLower()
+        $got  = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLower()
+        if ($want -and $want -ne $got) { Remove-Item $zip -Force -ErrorAction SilentlyContinue; Write-Host "  [x] PowerShell 7 SHA256 mismatch." -ForegroundColor Red; exit 1 }
+        $pwshDir = Join-Path $HOME '.local\bin\pwsh-7'
+        if (Test-Path $pwshDir) { Remove-Item $pwshDir -Recurse -Force }
+        New-Item -ItemType Directory -Path $pwshDir -Force | Out-Null
+        Expand-Archive -Path $zip -DestinationPath $pwshDir -Force
+        Remove-Item $zip -Force -ErrorAction SilentlyContinue
+        $pwsh = Join-Path $pwshDir 'pwsh.exe'
+    }
+    Write-Host "  [*] Relaunching under PowerShell 7..."
+    & $pwsh -NoProfile -Command "irm https://install.simplemotion.com/sm-welcome.ps1 | iex"
+    exit $LASTEXITCODE
+}
+
 Write-Host ""
-Write-Host "  SimpleMotion — Development Environment Onboarding"
-Write-Host "  ══════════════════════════════════════════════════"
+Write-Host "  SimpleMotion - Development Environment Onboarding"
+Write-Host "  =================================================="
 
 # Source the shared install-toolchain library. Brings in Confirm-Section,
 # Get-LatestRelease, Confirm-AssetDigest, Remove-TreeForcefully,
@@ -75,16 +110,16 @@ $LocalGitDir = Join-Path $LocalBinDir 'git'
 # Exported so sm-install.ps1 (Section 2) picks up the same value.
 $env:TUF_ROOT = Join-Path $HOME '.simplemotion\sigstore'
 
-# Host arch — used by Install-PwshPortable and Install-GitPortable.
+# Host arch - used by Install-PwshPortable and Install-GitPortable.
 # (cosign always uses the amd64 binary on Windows; that's handled in
 # Install-Cosign inside sm-install-lib.ps1, since cosign doesn't ship
 # a Windows-arm64 build and Windows-on-ARM emulates x64 fine.)
 $archSuffix = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
 
-# ── Discovery helpers ──────────────────────────────────────────────
+# -- Discovery helpers ----------------------------------------------
 # pwsh / git are sm-welcome-specific (sm-install doesn't need them).
 # Find-Cosign is provided by sm-install-lib.ps1. All three deliberately
-# check ~/.local/bin ONLY — system-wide installs are ignored. Section 1
+# check ~/.local/bin ONLY - system-wide installs are ignored. Section 1
 # always provisions to ~/.local/bin so the toolchain stays per-user and
 # version drift across machines stays bounded.
 function Find-Pwsh7 {
@@ -98,7 +133,7 @@ function Find-Git {
     return $null
 }
 
-# ── Install helpers ────────────────────────────────────────────────
+# -- Install helpers ------------------------------------------------
 # Install-PwshPortable and Install-GitPortable are sm-welcome-specific
 # (other SimpleMotion installers don't bootstrap a developer shell
 # environment). Each fetches the project's /releases/latest metadata,
@@ -192,12 +227,12 @@ $localBin   = Join-Path $installDir 'sm-welcome.exe'
 # (~/.simplemotion), and the binary's step-tracker (~/.sm-welcome.toml).
 if ($env:SM_WELCOME_CLEAN) {
     Write-Host ""
-    Write-Host "  [!] SM_WELCOME_CLEAN set — wiping prior bootstrap state" -ForegroundColor Yellow
+    Write-Host "  [!] SM_WELCOME_CLEAN set - wiping prior bootstrap state" -ForegroundColor Yellow
     foreach ($d in @((Join-Path $HOME '.local'), (Join-Path $HOME '.simplemotion'))) {
         if (Test-Path $d) {
             Remove-TreeForcefully $d
             if (Test-Path $d) {
-                # Partial removal — typically because pwsh.exe / git.exe
+                # Partial removal - typically because pwsh.exe / git.exe
                 # from a still-running window has an open file handle.
                 Write-Host ("      [!] partial: {0} still has files (likely a process held a lock)" -f $d) -ForegroundColor Yellow
             } else {
@@ -212,7 +247,7 @@ if ($env:SM_WELCOME_CLEAN) {
     }
 }
 
-# ── Section 1: Prerequisites ──────────────────────────────────────────
+# -- Section 1: Prerequisites ------------------------------------------
 $pwshPath   = Find-Pwsh7
 $gitPath    = Find-Git
 $cosignPath = Find-Cosign
@@ -248,7 +283,7 @@ if ($cosignPath) {
     if (Initialize-CosignTuf $cosignPath) {
         Write-Host ("  [v] cosign TUF initialized in {0}" -f $env:TUF_ROOT) -ForegroundColor Green
     } else {
-        Write-Host "  [!] cosign TUF init failed — Section 2 will skip attestation verification" -ForegroundColor Yellow
+        Write-Host "  [!] cosign TUF init failed - Section 2 will skip attestation verification" -ForegroundColor Yellow
     }
 }
 
@@ -256,11 +291,11 @@ if ($cosignPath) {
 # find the just-installed binaries without a new shell.
 $env:PATH = "$LocalBinDir;$LocalPwshDir;$(Join-Path $LocalGitDir 'cmd');$env:PATH"
 
-# ── Section 2: sm-welcome ─────────────────────────────────────────────
-# Fast-path resolution — channel-aware. The per-channel store
+# -- Section 2: sm-welcome ---------------------------------------------
+# Fast-path resolution - channel-aware. The per-channel store
 # (~/.simplemotion/share/sm-welcome/sm-<channel>/sm-welcome.exe) holds the
 # binary we last installed for THIS channel. If its version already matches
-# the channel's latest release, skip the download — and re-point the
+# the channel's latest release, skip the download - and re-point the
 # ~/.simplemotion/bin link at it, so a channel *switch* still takes effect
 # without a download. We check the channel's own stored binary (not the
 # bin/ link, which may currently point at a different channel).
@@ -294,7 +329,7 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and $storeBin -and (Test-Path $storeBin
         } catch { $latestVer = $null }
     }
     if ($localVer -and $latestVer -and $localVer -eq $latestVer) {
-        # Already have this channel's latest — re-point the active link
+        # Already have this channel's latest - re-point the active link
         # (cheap) so switching channels takes effect without a re-download.
         if (-not (Test-Path $installDir)) { New-Item -ItemType Directory -Path $installDir -Force | Out-Null }
         if (Test-Path $localBin) { Remove-Item $localBin -Recurse -Force }
@@ -322,7 +357,7 @@ if (-not $skipDownload) {
     }
 }
 
-# ── Section 3: Launch ─────────────────────────────────────────────────
+# -- Section 3: Launch -------------------------------------------------
 Confirm-Section 'Section 3 of 3: Launch'
 
 if ($pwshPath) {
@@ -363,7 +398,7 @@ if ($pwshPath) {
             Start-Process @startArgs -Verb RunAs -ErrorAction Stop
             Write-Host "  [v] Launched sm-welcome in an elevated PowerShell 7 console" -ForegroundColor Green
         } catch {
-            Write-Host "  [!] UAC declined — launching without admin (preflight will warn about LongPaths/Defender)" -ForegroundColor Yellow
+            Write-Host "  [!] UAC declined - launching without admin (preflight will warn about LongPaths/Defender)" -ForegroundColor Yellow
             Start-Process @startArgs
         }
     } else {
