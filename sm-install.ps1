@@ -232,7 +232,12 @@ if ($bundleOk -and -not $cosignBin) {
     }
 }
 if ($bundleOk -and $cosignBin) {
-    $certIdRegex = "https://github.com/$SourceRepo/\.github/workflows/.*"
+    # Attestations are signed by the canonical sm-ci REUSABLE workflow, so the
+    # cert SAN is sm-ci's ref — NOT the source repo's. Pin the identity to sm-ci
+    # and bind the source repo separately via the workflow-repository claim.
+    # (Pinning the source repo AS the identity, the old behaviour, never matched
+    # and always rejected the bundle.)
+    $certIdRegex = 'https://github.com/simplemotion/sm-ci/\.github/workflows/sm-ci\.yml@.*'
     & $cosignBin verify-blob-attestation `
         --bundle $tmpAtt `
         --new-bundle-format `
@@ -241,10 +246,11 @@ if ($bundleOk -and $cosignBin) {
         --insecure-ignore-sct `
         --type slsaprovenance1 `
         --certificate-identity-regexp $certIdRegex `
+        --certificate-github-workflow-repository $SourceRepo `
         --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' `
         $tmpBin *> $null
     if ($LASTEXITCODE -eq 0) {
-        Write-Host ("  [v] {0} Provenance verified (cosign, signed by {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
+        Write-Host ("  [v] {0} Provenance verified (cosign; built from {1} via sm-ci)" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
     } else {
         Write-Host ("  [x] {0} Provenance verification failed (cosign rejected the bundle)" -f (Format-Step 4)) -ForegroundColor Red
         Remove-Item $tmpAtt, $tmpBin -ErrorAction SilentlyContinue
