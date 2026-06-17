@@ -83,7 +83,11 @@ if ($PSVersionTable.PSVersion.Major -lt 6) {
         $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
         $gh = @{ 'X-GitHub-Api-Version' = '2022-11-28' }
         if ($env:GH_TOKEN) { $gh['Authorization'] = "Bearer $($env:GH_TOKEN)" } elseif ($env:GITHUB_TOKEN) { $gh['Authorization'] = "Bearer $($env:GITHUB_TOKEN)" }
-        $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' -UseBasicParsing -Headers $gh
+        $rel = $null   # manual retry (PS 5.1 has no -MaximumRetryCount) for transient blips
+        for ($try = 1; $try -le 3; $try++) {
+            try { $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' -UseBasicParsing -Headers $gh; break }
+            catch { if ($try -eq 3) { throw }; Start-Sleep -Seconds (2 * $try) }
+        }
         $ver = $rel.tag_name.TrimStart('v')
         $asset = $rel.assets | Where-Object { $_.name -eq "PowerShell-$ver-win-$arch.zip" } | Select-Object -First 1
         if (-not $asset) { Write-Host "  [x] No PowerShell 7 release asset for win-$arch." -ForegroundColor Red; exit 1 }
@@ -181,7 +185,7 @@ function Format-Step([int]$i) { return ('[{0:D2}/{1}]' -f $i, $StepsTotal) }
 #     list and pick the newest tag matching the prefix.
 if (-not $Version) {
     if ($TagPrefix) {
-        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -UseBasicParsing -Headers (Get-GitHubApiHeaders)
+        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -UseBasicParsing -Headers (Get-GitHubApiHeaders) -MaximumRetryCount 3 -RetryIntervalSec 2
         $picked = $releases | Where-Object { $_.tag_name.StartsWith($TagPrefix) } | Select-Object -First 1
         if (-not $picked) {
             Write-Host ""
@@ -198,7 +202,7 @@ if (-not $Version) {
         $Version = $picked.tag_name
     } else {
         try {
-            $latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing -Headers (Get-GitHubApiHeaders)
+            $latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -UseBasicParsing -Headers (Get-GitHubApiHeaders) -MaximumRetryCount 3 -RetryIntervalSec 2
             $Version = $latest.tag_name
         } catch {
             Write-Host ""

@@ -85,10 +85,12 @@ curl() { command curl --tlsv1.2 "$@"; }
 # redirect off api.github.com. Use ONLY for api.github.com calls.
 SM_GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 gh_api() {
+    # --retry rides out transient api.github.com failures (5xx/429/connection
+    # resets) so a momentary blip isn't misread as "no release published yet".
     if [ -n "$SM_GH_TOKEN" ]; then
-        curl -fsSL -H "Authorization: Bearer $SM_GH_TOKEN" -H "X-GitHub-Api-Version: 2022-11-28" "$@"
+        curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer $SM_GH_TOKEN" -H "X-GitHub-Api-Version: 2022-11-28" "$@"
     else
-        curl -fsSL "$@"
+        curl -fsSL --retry 3 --retry-delay 2 "$@"
     fi
 }
 
