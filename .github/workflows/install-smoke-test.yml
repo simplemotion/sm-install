@@ -35,7 +35,7 @@ jobs:
       - name: Install + verify (PowerShell 7)
         shell: pwsh
         run: |
-          $log = & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install 2>&1
+          $log = & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install *>&1
           $log | ForEach-Object { Write-Host $_ }
           if ($LASTEXITCODE -ne 0) { throw "installer exit $LASTEXITCODE" }
           if (-not ($log -join "`n" | Select-String -Quiet 'Provenance verified')) { throw 'provenance NOT verified' }
@@ -49,7 +49,7 @@ jobs:
       - name: Install + verify (Windows PowerShell 5.1)
         shell: powershell
         run: |
-          $log = & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install 2>&1
+          $log = & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install *>&1
           $log | ForEach-Object { Write-Host $_ }
           if ($LASTEXITCODE -ne 0) { throw "installer exit $LASTEXITCODE" }
           if (-not ($log -join "`n" | Select-String -Quiet 'Provenance verified')) { throw 'provenance NOT verified' }
@@ -68,7 +68,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          log=$(./sm-install.sh --package "$PKG" --asset-suffix short --source-repo "$SRC" --channel "$CH" --mode install 2>&1) || { echo "$log"; exit 1; }
+          log=$(bash sm-install.sh --package "$PKG" --asset-suffix short --source-repo "$SRC" --channel "$CH" --mode install 2>&1) || { echo "$log"; exit 1; }
           echo "$log"
           echo "$log" | grep -q 'Provenance verified' || { echo 'provenance NOT verified' >&2; exit 1; }
           "$HOME/.simplemotion/bin/sm-welcome" -V
