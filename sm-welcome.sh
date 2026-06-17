@@ -38,6 +38,12 @@
 
 set -euo pipefail
 
+# Match the Windows TLS pin (sm-*.ps1's SecurityProtocol): force a TLS 1.2
+# floor on every curl in this process — including the lib sourced below.
+# curl on macOS/Linux already negotiates 1.2/1.3, so this is defensive
+# (rejects ancient TLS / downgrade). `command` avoids recursing into itself.
+curl() { command curl --tlsv1.2 "$@"; }
+
 # Per-SimpleMotion TUF cache so we don't clobber any existing public-good
 # Sigstore trust under ~/.sigstore. Exported so sm-install.sh picks it up.
 export TUF_ROOT="${TUF_ROOT:-$HOME/.simplemotion/sigstore}"

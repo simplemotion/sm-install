@@ -72,6 +72,12 @@
 
 set -euo pipefail
 
+# Match the Windows TLS pin (sm-*.ps1's SecurityProtocol): force a TLS 1.2
+# floor on every curl in this process — including the lib sourced below.
+# curl on macOS/Linux already negotiates 1.2/1.3, so this is defensive
+# (rejects ancient TLS / downgrade). `command` avoids recursing into itself.
+curl() { command curl --tlsv1.2 "$@"; }
+
 # Source the shared install-toolchain library (confirm_section,
 # find_cosign, ensure_cosign, initialize_cosign_tuf). sm-welcome.sh
 # loads the same lib at startup, so functions are consistent across
