@@ -26,6 +26,9 @@ env:
   PKG: sm-welcome
   SRC: 3400-0000-SM-Software/3400-0009-SM-Welcome
   CH: release
+  # Authenticate the installer's api.github.com calls so shared-runner IPs
+  # don't hit the 60/hr unauthenticated rate limit (the macOS flake).
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   windows-pwsh:

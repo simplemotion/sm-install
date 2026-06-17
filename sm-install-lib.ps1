@@ -50,9 +50,18 @@ function Confirm-Section($title) {
     }
 }
 
+# Headers for api.github.com: authenticate when GH_TOKEN/GITHUB_TOKEN is set,
+# lifting the 60/hr unauthenticated rate limit on shared CI / corporate-NAT IPs.
+function Get-GitHubApiHeaders {
+    $h = @{ 'X-GitHub-Api-Version' = '2022-11-28' }
+    $tok = if ($env:GH_TOKEN) { $env:GH_TOKEN } elseif ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } else { $null }
+    if ($tok) { $h['Authorization'] = "Bearer $tok" }
+    return $h
+}
+
 function Get-LatestRelease($repo) {
     try {
-        return Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing
+        return Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing -Headers (Get-GitHubApiHeaders)
     } catch {
         Write-Host ("  [!] release lookup failed for {0}: {1}" -f $repo, $_.Exception.Message) -ForegroundColor Yellow
         return $null
