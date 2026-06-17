@@ -1,0 +1,74 @@
+name: install-smoke-test
+
+# Smoke test for the public installer: on each OS, install sm-welcome from
+# the release channel via the generic installer and assert that (1) cosign
+# provenance verifies and (2) the binary runs. Guards against regressions
+# like the sm-ci signer-identity mismatch fixed in #31. Mode=install only —
+# no interactive onboarding (that's sm-welcome.{sh,ps1}'s Section 3).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 6 * * 1'   # Mondays 06:17 UTC
+  push:
+    branches: [main]
+    paths:
+      - 'sm-install.sh'
+      - 'sm-install.ps1'
+      - 'sm-install-lib.sh'
+      - 'sm-install-lib.ps1'
+      - '.github/workflows/install-smoke-test.yml'
+
+permissions:
+  contents: read
+
+env:
+  PKG: sm-welcome
+  SRC: 3400-0000-SM-Software/3400-0009-SM-Welcome
+  CH: release
+
+jobs:
+  windows-pwsh:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install + verify (PowerShell 7)
+        shell: pwsh
+        run: |
+          $log = & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install 2>&1
+          $log | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) { throw "installer exit $LASTEXITCODE" }
+          if (-not ($log -join "`n" | Select-String -Quiet 'Provenance verified')) { throw 'provenance NOT verified' }
+          & (Join-Path $HOME '.simplemotion/bin/sm-welcome.exe') -V
+          if ($LASTEXITCODE -ne 0) { throw "binary -V exit $LASTEXITCODE" }
+
+  windows-ps51:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install + verify (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $log = & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install 2>&1
+          $log | ForEach-Object { Write-Host $_ }
+          if ($LASTEXITCODE -ne 0) { throw "installer exit $LASTEXITCODE" }
+          if (-not ($log -join "`n" | Select-String -Quiet 'Provenance verified')) { throw 'provenance NOT verified' }
+          & (Join-Path $HOME '.simplemotion/bin/sm-welcome.exe') -V
+          if ($LASTEXITCODE -ne 0) { throw "binary -V exit $LASTEXITCODE" }
+
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install + verify (bash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          log=$(./sm-install.sh --package "$PKG" --asset-suffix short --source-repo "$SRC" --channel "$CH" --mode install 2>&1) || { echo "$log"; exit 1; }
+          echo "$log"
+          echo "$log" | grep -q 'Provenance verified' || { echo 'provenance NOT verified' >&2; exit 1; }
+          "$HOME/.simplemotion/bin/sm-welcome" -V
