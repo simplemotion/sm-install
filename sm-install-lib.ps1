@@ -61,7 +61,7 @@ function Get-GitHubApiHeaders {
 
 function Get-LatestRelease($repo) {
     try {
-        return Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing -Headers (Get-GitHubApiHeaders)
+        return Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -UseBasicParsing -Headers (Get-GitHubApiHeaders) -MaximumRetryCount 3 -RetryIntervalSec 2
     } catch {
         Write-Host ("  [!] release lookup failed for {0}: {1}" -f $repo, $_.Exception.Message) -ForegroundColor Yellow
         return $null
