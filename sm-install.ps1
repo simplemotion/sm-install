@@ -19,8 +19,14 @@
 #                                resolves to `<package>-<host-triple>.exe`.
 #
 # Optional parameters:
-#   -SourceRepo OWNER/NAME       Repo the attestation is signed against.
+#   -SourceRepo OWNER/NAME       Source repo the binary was built from
+#                                (recorded in the install receipt).
 #                                Defaults to -Repo.
+#   -SignerRepo OWNER/NAME       Repo whose reusable workflow signed the
+#                                attestation (anchors the cosign
+#                                cert-identity check). The Fulcio leaf SAN
+#                                is the signer job ref, not the source
+#                                repo. Default: simplemotion/sm-ci.
 #   -TagPrefix PREFIX            Tag filter for channel resolution.
 #   -Mode install|run|install-and-run
 #                                install         = drop in install dir, exit.
@@ -46,6 +52,7 @@ param(
     [Parameter(Mandatory=$true)] [string]$Package,
     [string]$Repo = '',
     [string]$SourceRepo = '',
+    [string]$SignerRepo = '',
     [string]$TagPrefix = '',
     [ValidateSet('install','run','install-and-run')] [string]$Mode = 'install',
     [string]$InstallDir = '',
@@ -80,6 +87,11 @@ if ($Channel -eq 'private') {
 # Channel → repo defaulting. Each channel maps to its own GitHub repo.
 if (-not $Repo) { $Repo = "simplemotion/sm-$Channel" }
 if (-not $SourceRepo) { $SourceRepo = $Repo }
+# The cosign attestation is signed by the sm-ci reusable workflow (the
+# Fulcio leaf-cert SAN is the *signer* job ref — the reusable workflow's
+# repo, NOT the calling source repo). Anchor the cert-identity check on
+# the signer, defaulting to the canonical sm-ci.
+if (-not $SignerRepo) { $SignerRepo = 'simplemotion/sm-ci' }
 if (-not $InstallDir) {
     if ($env:SM_INSTALL_DIR) {
         $InstallDir = $env:SM_INSTALL_DIR
@@ -205,7 +217,7 @@ if ($bundleOk -and -not $cosignBin) {
     }
 }
 if ($bundleOk -and $cosignBin) {
-    $certIdRegex = "https://github.com/$SourceRepo/\.github/workflows/.*"
+    $certIdRegex = "https://github.com/$SignerRepo/\.github/workflows/.*"
     & $cosignBin verify-blob-attestation `
         --bundle $tmpAtt `
         --new-bundle-format `
@@ -217,7 +229,7 @@ if ($bundleOk -and $cosignBin) {
         --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' `
         $tmpBin *> $null
     if ($LASTEXITCODE -eq 0) {
-        Write-Host ("  [v] {0} Provenance verified (cosign, signed by {1})" -f (Format-Step 4), $SourceRepo) -ForegroundColor Green
+        Write-Host ("  [v] {0} Provenance verified (cosign, signed by {1})" -f (Format-Step 4), $SignerRepo) -ForegroundColor Green
     } else {
         Write-Host ("  [x] {0} Provenance verification failed (cosign rejected the bundle)" -f (Format-Step 4)) -ForegroundColor Red
         Remove-Item $tmpAtt, $tmpBin -ErrorAction SilentlyContinue

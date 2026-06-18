@@ -27,9 +27,14 @@
 #   --repo OWNER/NAME            Override the channel→repo default.
 #                                Useful for development or hosting on a
 #                                non-SimpleMotion repo.
-#   --source-repo OWNER/NAME     Repo the attestation is signed against
-#                                (anchors the cosign cert-identity check).
+#   --source-repo OWNER/NAME     Source repo the binary was built from
+#                                (recorded in the install receipt).
 #                                Defaults to --repo.
+#   --signer-repo OWNER/NAME     Repo whose reusable workflow signed the
+#                                attestation (anchors the cosign
+#                                cert-identity check). The Fulcio leaf SAN
+#                                is the signer job ref, not the source
+#                                repo. Default: simplemotion/sm-ci.
 #   --tag-prefix PREFIX          For channel repos that host multiple
 #                                packages, filter the releases list to
 #                                tags starting with PREFIX (e.g.
@@ -89,6 +94,7 @@ export PATH="$HOME/.simplemotion/bin:$HOME/.local/bin:$PATH"
 REPO=""
 PACKAGE=""
 SOURCE_REPO=""
+SIGNER_REPO=""
 TAG_PREFIX=""
 MODE="install"
 INSTALL_DIR=""
@@ -102,6 +108,7 @@ while [[ $# -gt 0 ]]; do
         --repo)         REPO="$2"; shift 2 ;;
         --package)      PACKAGE="$2"; shift 2 ;;
         --source-repo)  SOURCE_REPO="$2"; shift 2 ;;
+        --signer-repo)  SIGNER_REPO="$2"; shift 2 ;;
         --tag-prefix)   TAG_PREFIX="$2"; shift 2 ;;
         --mode)         MODE="$2"; shift 2 ;;
         --install-dir)  INSTALL_DIR="$2"; shift 2 ;;
@@ -144,6 +151,11 @@ if [[ -z "$REPO" ]]; then
 fi
 
 SOURCE_REPO="${SOURCE_REPO:-$REPO}"
+# The cosign attestation is signed by the sm-ci reusable workflow (the
+# Fulcio leaf-cert SAN is the *signer* job ref, i.e. the reusable
+# workflow's repo — NOT the calling source repo). Anchor the
+# cert-identity check on the signer, defaulting to the canonical sm-ci.
+SIGNER_REPO="${SIGNER_REPO:-simplemotion/sm-ci}"
 # Default install dir varies by package: sm-* products share
 # ~/.simplemotion/bin; everything else falls back to the XDG default.
 if [[ -z "$INSTALL_DIR" ]]; then
@@ -298,7 +310,7 @@ if curl -fsSL "${URL}.sigstore.jsonl" -o "$TMPATT" 2>/dev/null; then
     fi
 fi
 if [[ -s "$TMPATT" ]] && [[ -n "$COSIGN_BIN" ]]; then
-    cert_id_regex="https://github.com/${SOURCE_REPO}/\.github/workflows/.*"
+    cert_id_regex="https://github.com/${SIGNER_REPO}/\.github/workflows/.*"
     if "$COSIGN_BIN" verify-blob-attestation \
         --bundle "$TMPATT" \
         --new-bundle-format \
@@ -309,7 +321,7 @@ if [[ -s "$TMPATT" ]] && [[ -n "$COSIGN_BIN" ]]; then
         --certificate-identity-regexp "$cert_id_regex" \
         --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
         "$TMPBIN" >/dev/null 2>&1; then
-        printf '  [%s✓%s] %s Provenance verified (cosign, signed by %s)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO"
+        printf '  [%s✓%s] %s Provenance verified (cosign, signed by %s)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SIGNER_REPO"
     else
         printf '  [%s✗%s] %s Provenance verification failed (cosign rejected the bundle)\n' "$RED" "$RESET" "$(fmt_step 4)" >&2
         exit 1
