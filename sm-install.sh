@@ -36,13 +36,15 @@
 #                                `sm-simplicity-v`). Default: no filter
 #                                (single-package channel — use
 #                                `releases/latest` directly).
-#   --asset-suffix triple|short  Asset-name suffix style:
-#                                  triple = `<package>-<arch>-<os>` (default;
+#   --asset-suffix short|triple  Asset-name suffix style:
+#                                  short  = `<package>-<os>-<arch>` (default)
+#                                           with the short OS/arch codes —
+#                                           `mac`/`lin` and `arm64`/`x64`
+#                                           (e.g. `sm-x-mac-arm64`). This is
+#                                           what the sm-ci reusable workflow
+#                                           publishes fleet-wide.
+#                                  triple = `<package>-<arch>-<os>` (legacy;
 #                                           e.g. `sm-x-aarch64-apple-darwin`)
-#                                  short  = `<package>-<os>-<arch>` with the
-#                                           short OS/arch codes — `mac`/`lin`
-#                                           and `arm64`/`x64` (e.g.
-#                                           `sm-x-mac-arm64`).
 #                                Each style needs the publisher to ship
 #                                matching asset names; ARM64 + x86_64 are
 #                                expected for all three OSes under `short`.
@@ -120,7 +122,7 @@ MODE="install"
 INSTALL_DIR=""
 VERSION=""
 CHANNEL="${SM_CHANNEL:-release}"
-ASSET_SUFFIX="triple"
+ASSET_SUFFIX="short"
 BIN_ARGS=()
 
 while [[ $# -gt 0 ]]; do
