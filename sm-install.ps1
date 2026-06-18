@@ -33,13 +33,15 @@
 #                                ~/.simplemotion/bin.
 #   -Version TAG                 Pin a specific tag.
 #   -Channel release|preview     Default: $env:SM_CHANNEL or 'release'.
-#   -AssetSuffix triple|short    Asset-name suffix style:
-#                                  triple = `<package>-<arch>-<os>.exe`
-#                                           (default; e.g.
-#                                           `sm-x-aarch64-pc-windows-msvc.exe`)
+#   -AssetSuffix short|triple    Asset-name suffix style:
 #                                  short  = `<package>-win-<arch>.exe`
-#                                           with arm64/x64 short codes
-#                                           (e.g. `sm-x-win-arm64.exe`).
+#                                           (default) with arm64/x64 short
+#                                           codes (e.g. `sm-x-win-arm64.exe`).
+#                                           What the sm-ci reusable workflow
+#                                           publishes fleet-wide.
+#                                  triple = `<package>-<arch>-<os>.exe`
+#                                           (legacy; e.g.
+#                                           `sm-x-aarch64-pc-windows-msvc.exe`)
 #   -BinArgs ARGS                Forwarded to the binary in run mode.
 
 param(
@@ -51,7 +53,7 @@ param(
     [string]$InstallDir = '',
     [string]$Version = '',
     [ValidateSet('release','preview','develop','testing','private')] [string]$Channel = '',
-    [ValidateSet('triple','short')] [string]$AssetSuffix = 'triple',
+    [ValidateSet('short','triple')] [string]$AssetSuffix = 'short',
     [string[]]$BinArgs = @()
 )
 
