@@ -80,11 +80,12 @@ sm_route_tmpdir
 # steps via env vars the binary reads (banner suppression + offset).
 export SM_WELCOME_NO_BANNER=1
 export SM_WELCOME_STEPS_OFFSET=5
-# Binary has 14 internal steps on Unix (Linux + macOS share the same
-# step set; the Windows-only 06-shell slot is in STEPS_WIN only).
-# Bootstrap contributes 5 silent steps. 5 + 14 = 19.
-# Update if the binary's Unix step count changes.
-export SM_WELCOME_STEPS_TOTAL=19
+# Binary has 16 internal steps on macOS / 15 on Linux (Linux omits the
+# macOS-only 13-touchid step). Bootstrap contributes 5 silent steps, so
+# 5 + 16 = 21 — sized for macOS (the deployed fleet); on Linux the final
+# step shows [20/21], one short, which is harmless.
+# Update if the binary's step count changes.
+export SM_WELCOME_STEPS_TOTAL=21
 
 # Pre-parse our own flags: --channel goes to sm-install.sh; everything
 # else forwards to the sm-welcome binary. SM_CHANNEL env var also

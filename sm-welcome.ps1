@@ -218,10 +218,11 @@ function Install-GitPortable {
 # steps via env vars the binary reads.
 $env:SM_WELCOME_NO_BANNER    = '1'
 $env:SM_WELCOME_STEPS_OFFSET = '5'
-# Binary has 15 internal steps (00-preflight through 14-reload-shell);
-# bootstrap contributes 5 silent steps. 5 + 15 = 20.
+# Binary has 16 internal steps on Windows (00-preflight through
+# 14-reload-shell, including the Windows-only 12-shell); bootstrap
+# contributes 5 silent steps. 5 + 16 = 21.
 # Update if the binary's step count changes.
-$env:SM_WELCOME_STEPS_TOTAL  = '20'
+$env:SM_WELCOME_STEPS_TOTAL  = '21'
 
 $channel    = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' }
 $installDir = if ($env:SM_INSTALL_DIR) { $env:SM_INSTALL_DIR } else { Join-Path $HOME '.simplemotion\bin' }
