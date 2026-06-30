@@ -21,12 +21,15 @@
 # Three interactive sections, each gated by a Y/n prompt and prefaced by
 # a splash explaining the section in detail:
 #   1. Prerequisites — verify git, curl, bash are present; auto-install
-#                      cosign via direct sigstore/cosign release download
-#                      + SHA256-verify into ~/.local/bin/cosign (no sudo,
-#                      no Homebrew); then run `cosign initialize` against
-#                      GitHub's Sigstore TUF so cosign can verify GitHub-
-#                      issued attestations natively. Missing git/curl
-#                      are flagged but not auto-installed (sudo / Xcode).
+#                      PowerShell 7 (portable, SHA256-verified) into
+#                      ~/.local/bin/pwsh-7 for the M365/Exchange admin
+#                      scripts; auto-install cosign via direct
+#                      sigstore/cosign release download + SHA256-verify into
+#                      ~/.local/bin/cosign (no sudo, no Homebrew); then run
+#                      `cosign initialize` against GitHub's Sigstore TUF so
+#                      cosign can verify GitHub-issued attestations natively.
+#                      Missing git/curl are flagged but not auto-installed
+#                      (sudo / Xcode).
 #   2. sm-welcome    — download sm-welcome from the selected channel,
 #                      verify SHA256 + sigstore build-provenance (cosign,
 #                      installed in Section 1). Fast-paths if the local
@@ -126,6 +129,7 @@ if [[ $CLEAN -eq 1 ]]; then
     for p in \
         "$HOME/.local/bin/cosign" \
         "$HOME/.local/bin/pwsh-7" \
+        "$HOME/.local/bin/pwsh" \
         "$HOME/.local/bin/git" \
         "$HOME/.simplemotion" \
         "$HOME/.sm-welcome.toml"; do
@@ -157,6 +161,14 @@ if [[ -x "$HOME/.local/bin/cosign" ]]; then
 else
     COSIGN_STATE="missing"
 fi
+# pwsh 7 is a SimpleMotion-managed tool too — like cosign, we ignore any
+# system-wide PowerShell and use only the portable copy at
+# ~/.local/bin/pwsh-7 (symlinked as ~/.local/bin/pwsh).
+if [[ -x "$HOME/.local/bin/pwsh-7/pwsh" ]]; then
+    PWSH_STATE="present ($HOME/.local/bin/pwsh-7/pwsh)"
+else
+    PWSH_STATE="missing"
+fi
 
 confirm_section "Section 1 of 3: Prerequisites"
 
@@ -167,6 +179,16 @@ if [[ "$CURL_STATE" == "missing" ]]; then
 fi
 if [[ "$GIT_STATE" == "missing" ]]; then
     printf '  [!] git not found — sm-welcome will report this in its preflight.\n'
+fi
+if [[ "$PWSH_STATE" == "missing" ]]; then
+    printf '  [*] Installing PowerShell 7 (PowerShell/PowerShell latest, SHA256-verified)...\n'
+    if ensure_pwsh; then
+        printf '  [v] PowerShell 7 installed: %s\n' "$PWSH_BIN"
+    else
+        printf '  [!] PowerShell 7 install failed — the M365/Exchange admin scripts (sm-set-*.ps1) will need pwsh installed manually.\n'
+    fi
+else
+    printf '  [v] PowerShell 7 present: %s\n' "$HOME/.local/bin/pwsh-7/pwsh"
 fi
 if [[ "$COSIGN_STATE" == "missing" ]]; then
     printf '  [*] Installing cosign (sigstore/cosign latest, SHA256-verified)...\n'

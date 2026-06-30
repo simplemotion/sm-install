@@ -184,3 +184,121 @@ initialize_cosign_tuf() {
     printf '      [-] cosign TUF init failed\n'
     return 1
 }
+
+find_pwsh() {
+    PWSH_BIN=""
+    if [[ -x "$HOME/.local/bin/pwsh-7/pwsh" ]]; then
+        PWSH_BIN="$HOME/.local/bin/pwsh-7/pwsh"; return 0
+    fi
+    return 1
+}
+
+# Install PowerShell 7 (portable) into ~/.local/bin/pwsh-7 from the official
+# PowerShell/PowerShell GitHub release tarball, SHA256-verified against the
+# API's per-asset digest, and symlink ~/.local/bin/pwsh at it. The Unix
+# parallel to sm-welcome.ps1's Install-PwshPortable. Self-contained, per-user,
+# no Homebrew/apt/sudo. pwsh is the shell the M365 / Exchange Online admin
+# scripts (sm-set-*.ps1) target; the SimpleMotion toolchain prefers pwsh 7
+# over the in-box shells. Best-effort: degrades to a notice on any failure.
+ensure_pwsh() {
+    PWSH_BIN=""
+    local pwsh_dir="$HOME/.local/bin/pwsh-7"
+    local pwsh_exe="${pwsh_dir}/pwsh"
+    if [[ -x "$pwsh_exe" ]]; then
+        PWSH_BIN="$pwsh_exe"; return 0
+    fi
+
+    local ps_os ps_arch
+    case "$(uname -s)" in
+        Darwin) ps_os=osx ;;
+        Linux)  ps_os=linux ;;
+        *) printf '      [-] PowerShell bootstrap skipped (unsupported OS)\n'; return 1 ;;
+    esac
+    case "$(uname -m)" in
+        x86_64|amd64)  ps_arch=x64 ;;
+        arm64|aarch64) ps_arch=arm64 ;;
+        *) printf '      [-] PowerShell bootstrap skipped (unsupported arch)\n'; return 1 ;;
+    esac
+
+    # Resolve the latest non-prerelease release metadata once: the tag (→
+    # version → deterministic asset name) and the asset's SHA256, taken from
+    # the GitHub API's per-asset `digest` field (plain UTF-8 JSON). We
+    # deliberately avoid the release's hashes.sha256 file — it ships as
+    # UTF-16 + CRLF, which POSIX awk/sha256sum can't parse portably. This is
+    # the same digest the Windows installer verifies via Confirm-AssetDigest.
+    local rel_json tag version asset
+    rel_json=$(sm_mktemp)
+    if ! curl -fsSL "https://api.github.com/repos/PowerShell/PowerShell/releases/latest" -o "$rel_json" 2>/dev/null; then
+        rm -f "$rel_json"
+        printf '      [-] PowerShell bootstrap skipped (release metadata fetch failed)\n'
+        return 1
+    fi
+    tag=$(awk -F'"' '/"tag_name":/ {print $4; exit}' "$rel_json")
+    if [[ -z "$tag" ]]; then
+        rm -f "$rel_json"
+        printf '      [-] PowerShell bootstrap skipped (no tag in release metadata)\n'
+        return 1
+    fi
+    version="${tag#v}"
+    asset="powershell-${version}-${ps_os}-${ps_arch}.tar.gz"
+
+    # Each asset object lists "name" before "digest" — capture the digest
+    # that follows our asset's name line, then drop the "sha256:" prefix.
+    local expected
+    expected=$(awk -F'"' -v a="$asset" '$2=="name" && $4==a {f=1} f && $2=="digest" {print $4; exit}' "$rel_json")
+    expected="${expected#sha256:}"
+    rm -f "$rel_json"
+    if [[ -z "$expected" ]]; then
+        printf '      [-] PowerShell bootstrap skipped (no SHA256 digest for %s)\n' "$asset"
+        return 1
+    fi
+
+    local url="https://github.com/PowerShell/PowerShell/releases/download/${tag}/${asset}"
+    local tmp_tgz
+    tmp_tgz=$(sm_mktemp)
+    if ! curl -fsSL "$url" -o "$tmp_tgz" 2>/dev/null; then
+        rm -f "$tmp_tgz"
+        printf '      [-] PowerShell bootstrap skipped (download failed)\n'
+        return 1
+    fi
+
+    local actual
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual=$(sha256sum "$tmp_tgz" | awk '{print $1}')
+    elif command -v shasum >/dev/null 2>&1; then
+        actual=$(shasum -a 256 "$tmp_tgz" | awk '{print $1}')
+    else
+        rm -f "$tmp_tgz"
+        printf '      [-] PowerShell bootstrap skipped (no sha256 tool)\n'
+        return 1
+    fi
+    if [[ "$expected" != "$actual" ]]; then
+        rm -f "$tmp_tgz"
+        printf '      [-] PowerShell bootstrap skipped (SHA256 mismatch on PowerShell asset)\n'
+        return 1
+    fi
+
+    # The tarball is flat — pwsh plus its bundled .NET assemblies extract
+    # straight into the destination. Wipe-and-extract so re-runs land clean.
+    rm -rf "$pwsh_dir"
+    mkdir -p "$pwsh_dir"
+    if ! tar -xzf "$tmp_tgz" -C "$pwsh_dir" 2>/dev/null; then
+        rm -f "$tmp_tgz"
+        printf '      [-] PowerShell bootstrap skipped (tar extract failed)\n'
+        return 1
+    fi
+    chmod 0755 "$pwsh_exe" 2>/dev/null || true
+    rm -f "$tmp_tgz"
+
+    if [[ ! -x "$pwsh_exe" ]]; then
+        printf '      [-] PowerShell bootstrap skipped (pwsh missing after extract)\n'
+        return 1
+    fi
+
+    # Expose `pwsh` on PATH: ~/.local/bin is already on the user's PATH
+    # (.zprofile / .zshenv), so symlink the real binary there. pwsh follows
+    # the symlink to resolve its bundled assemblies, so no copy is needed.
+    ln -sfn "$pwsh_exe" "$HOME/.local/bin/pwsh"
+    PWSH_BIN="$pwsh_exe"
+    return 0
+}
