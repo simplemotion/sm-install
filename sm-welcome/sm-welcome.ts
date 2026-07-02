@@ -97,13 +97,18 @@ interface CmdParts {
       cmdEl.dataset.copy = parts.leading + parts.head + (parts.tail ? ` ${parts.tail}` : '');
     }
 
-    // Verify glyph: release + preview ship sha256 + SLSA attestation (green
-    // ✓). testing + develop are unverified internal builds (red ✗).
+    // Verify glyph: every channel ships the SAME SHA256'd + SLSA-attested
+    // binaries. Under the build-once/promote model, develop is where CI
+    // builds and signs them; testing/preview/release are byte-identical
+    // promotions of those exact artifacts (verified — cosign
+    // verify-blob-attestation against the sm-ci signer identity passes on
+    // develop just as it does on release). So sha256 + attestation is ✓ on
+    // all four channels. (Channel maturity — pre-release vs GA — is what the
+    // channel tabs convey; it is not an integrity distinction.)
     const verifyEl = byId('cmd-verify');
     if (verifyEl) {
-      const unverified = channel === 'testing' || channel === 'develop';
-      verifyEl.classList.toggle('fail', unverified);
-      verifyEl.classList.toggle('ok', !unverified);
+      verifyEl.classList.add('ok');
+      verifyEl.classList.remove('fail');
     }
   };
 
