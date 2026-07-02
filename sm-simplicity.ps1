@@ -13,44 +13,15 @@ $ErrorActionPreference = 'Stop'
 # PowerShell 7 (already negotiates 1.2/1.3).
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-# --- PowerShell 7 guard (must stay ASCII so Windows PowerShell 5.1 can parse
-# the whole file before running this check). On 5.1, locate pwsh 7 (installing
-# a portable copy into ~/.local/bin if absent) and relaunch under it. ---
-if ($PSVersionTable.PSVersion.Major -lt 6) {
-    $pwsh = Join-Path $HOME '.local\bin\pwsh-7\pwsh.exe'
-    if (-not (Test-Path $pwsh)) {
-        $found = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($found) { $pwsh = $found.Source }
-    }
-    if (-not (Test-Path $pwsh)) {
-        Write-Host "  [*] Installing PowerShell 7 (portable) to run the installer..."
-        $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
-        $gh = @{ 'X-GitHub-Api-Version' = '2022-11-28' }
-        if ($env:GH_TOKEN) { $gh['Authorization'] = "Bearer $($env:GH_TOKEN)" } elseif ($env:GITHUB_TOKEN) { $gh['Authorization'] = "Bearer $($env:GITHUB_TOKEN)" }
-        $rel = $null   # manual retry (PS 5.1 has no -MaximumRetryCount) for transient blips
-        for ($try = 1; $try -le 3; $try++) {
-            try { $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' -UseBasicParsing -Headers $gh; break }
-            catch { if ($try -eq 3) { throw }; Start-Sleep -Seconds (2 * $try) }
-        }
-        $ver = $rel.tag_name.TrimStart('v')
-        $asset = $rel.assets | Where-Object { $_.name -eq "PowerShell-$ver-win-$arch.zip" } | Select-Object -First 1
-        if (-not $asset) { Write-Host "  [x] No PowerShell 7 release asset for win-$arch." -ForegroundColor Red; exit 1 }
-        $zip = Join-Path $env:TEMP ("pwsh-{0}.zip" -f ([Guid]::NewGuid().ToString('N')))
-        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
-        $want = ($asset.digest -replace '^sha256:', '').ToLower()
-        $got  = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLower()
-        if ($want -and $want -ne $got) { Remove-Item $zip -Force -ErrorAction SilentlyContinue; Write-Host "  [x] PowerShell 7 SHA256 mismatch." -ForegroundColor Red; exit 1 }
-        $pwshDir = Join-Path $HOME '.local\bin\pwsh-7'
-        if (Test-Path $pwshDir) { Remove-Item $pwshDir -Recurse -Force }
-        New-Item -ItemType Directory -Path $pwshDir -Force | Out-Null
-        Expand-Archive -Path $zip -DestinationPath $pwshDir -Force
-        Remove-Item $zip -Force -ErrorAction SilentlyContinue
-        $pwsh = Join-Path $pwshDir 'pwsh.exe'
-    }
-    Write-Host "  [*] Relaunching under PowerShell 7..."
-    & $pwsh -NoProfile -Command "irm https://install.simplemotion.com/sm-simplicity.ps1 | iex"
-    exit $LASTEXITCODE
-}
+# Source the shared install-toolchain library. Brings in Invoke-Pwsh7Guard
+# (used immediately below) plus the helpers sm-install.ps1 needs once
+# relaunched under pwsh 7 (Confirm-AssetDigest, Find-Cosign, etc.).
+$smInstallLib = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install-lib.ps1')
+Invoke-Expression $smInstallLib
+
+# On Windows PowerShell 5.1, relaunches this script under pwsh 7 (installing
+# a portable copy into ~/.local/bin if absent) and exits. No-op on pwsh 6+.
+Invoke-Pwsh7Guard -ScriptUrl 'https://install.simplemotion.com/sm-simplicity.ps1'
 
 Write-Host ""
 Write-Host "  SimpleMotion - Simplicity Installer"
