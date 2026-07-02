@@ -70,71 +70,19 @@ $ErrorActionPreference = 'Stop'
 # PowerShell 7 (already negotiates 1.2/1.3).
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-# --- PowerShell 7 guard (must stay ASCII so Windows PowerShell 5.1 can parse
-# the whole file before running this check). On 5.1, locate pwsh 7 (installing
-# a portable copy into ~/.local/bin if absent) and relaunch THIS script under
-# it, forwarding the same parameters. ---
-if ($PSVersionTable.PSVersion.Major -lt 6) {
-    $pwsh = Join-Path $HOME '.local\bin\pwsh-7\pwsh.exe'
-    if (-not (Test-Path $pwsh)) {
-        $found = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($found) { $pwsh = $found.Source }
-    }
-    if (-not (Test-Path $pwsh)) {
-        Write-Host "  [*] Installing PowerShell 7 (portable) to run the installer..."
-        $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
-        $gh = @{ 'X-GitHub-Api-Version' = '2022-11-28' }
-        if ($env:GH_TOKEN) { $gh['Authorization'] = "Bearer $($env:GH_TOKEN)" } elseif ($env:GITHUB_TOKEN) { $gh['Authorization'] = "Bearer $($env:GITHUB_TOKEN)" }
-        $rel = $null   # manual retry (PS 5.1 has no -MaximumRetryCount) for transient blips
-        for ($try = 1; $try -le 3; $try++) {
-            try { $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/PowerShell/PowerShell/releases/latest' -UseBasicParsing -Headers $gh; break }
-            catch { if ($try -eq 3) { throw }; Start-Sleep -Seconds (2 * $try) }
-        }
-        $ver = $rel.tag_name.TrimStart('v')
-        $asset = $rel.assets | Where-Object { $_.name -eq "PowerShell-$ver-win-$arch.zip" } | Select-Object -First 1
-        if (-not $asset) { Write-Host "  [x] No PowerShell 7 release asset for win-$arch." -ForegroundColor Red; exit 1 }
-        $zip = Join-Path $env:TEMP ("pwsh-{0}.zip" -f ([Guid]::NewGuid().ToString('N')))
-        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
-        $want = ($asset.digest -replace '^sha256:', '').ToLower()
-        $got  = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLower()
-        if ($want -and $want -ne $got) { Remove-Item $zip -Force -ErrorAction SilentlyContinue; Write-Host "  [x] PowerShell 7 SHA256 mismatch." -ForegroundColor Red; exit 1 }
-        $pwshDir = Join-Path $HOME '.local\bin\pwsh-7'
-        if (Test-Path $pwshDir) { Remove-Item $pwshDir -Recurse -Force }
-        New-Item -ItemType Directory -Path $pwshDir -Force | Out-Null
-        Expand-Archive -Path $zip -DestinationPath $pwshDir -Force
-        Remove-Item $zip -Force -ErrorAction SilentlyContinue
-        $pwsh = Join-Path $pwshDir 'pwsh.exe'
-    }
-    # Re-run this script under pwsh 7. Use the on-disk file if invoked from one;
-    # otherwise (iex of a download) materialize it to a temp file first.
-    $self = $PSCommandPath
-    if (-not $self) {
-        $self = Join-Path $env:TEMP ("sm-install-{0}.ps1" -f ([Guid]::NewGuid().ToString('N')))
-        (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1') | Set-Content -LiteralPath $self -Encoding UTF8
-    }
-    $fwd = @()
-    foreach ($k in $PSBoundParameters.Keys) {
-        $val = $PSBoundParameters[$k]
-        if ($val -is [System.Management.Automation.SwitchParameter] -or $val -is [bool]) {
-            if ($val) { $fwd += "-$k" }
-        } elseif ($val -is [System.Array]) {
-            foreach ($item in $val) { $fwd += "-$k"; $fwd += [string]$item }
-        } else {
-            $fwd += "-$k"; $fwd += [string]$val
-        }
-    }
-    Write-Host "  [*] Relaunching under PowerShell 7..."
-    & $pwsh -NoProfile -File $self @fwd
-    exit $LASTEXITCODE
-}
-
-# Source the shared install-toolchain library (Confirm-Section,
-# Get-LatestRelease, Confirm-AssetDigest, Remove-TreeForcefully,
-# Find-Cosign, Install-Cosign, Initialize-CosignTuf). sm-welcome.ps1
-# loads the same lib at startup, so functions are consistent across the
-# bootstrap and standalone-install code paths.
+# Source the shared install-toolchain library (Invoke-Pwsh7Guard,
+# Confirm-Section, Get-LatestRelease, Confirm-AssetDigest,
+# Remove-TreeForcefully, Find-Cosign, Install-Cosign, Initialize-CosignTuf).
+# sm-welcome.ps1 loads the same lib at startup, so functions are consistent
+# across the bootstrap and standalone-install code paths. Loaded before the
+# PowerShell-7 guard below so the guard itself can live in the shared lib.
 $smInstallLib = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install-lib.ps1')
 Invoke-Expression $smInstallLib
+
+# On Windows PowerShell 5.1, relaunches THIS script under pwsh 7 (installing
+# a portable copy into ~/.local/bin if absent), forwarding the same
+# parameters, and exits. No-op on pwsh 6+.
+Invoke-Pwsh7Guard -ScriptUrl 'https://install.simplemotion.com/sm-install.ps1' -ScriptPath $PSCommandPath -BoundParameters $PSBoundParameters
 
 # Surface SimpleMotion bins on `Get-Command` for the *first* run, before
 # any profile-script PATH edit has taken effect in a new PowerShell
