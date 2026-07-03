@@ -36,8 +36,9 @@
 #                      copy is already at the latest tag.
 #   3. Launch        — exec sm-welcome in the current shell.
 #
-# Non-interactive override: set SM_WELCOME_ASSUME_YES=1 to auto-accept
-# every section prompt (used by CI / unattended re-runs).
+# Section prompts auto-accept by default. Set SM_WELCOME_CONFIRM=1 to gate
+# each section behind Proceed? [Y/n]; SM_WELCOME_ASSUME_YES=1 (the old
+# non-interactive override) still forces auto-accept over it.
 
 set -euo pipefail
 
