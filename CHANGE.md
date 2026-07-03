@@ -12,6 +12,7 @@ This repo holds the installer scripts served at `install.simplemotion.com`. The 
 
 | Version | Date | Author | Notes |
 |---------|------|--------|-------|
+| v0.1.1 | 2026-07-03 | Greg Gowans | **Bootstrap section prompts auto-accept by default.** `confirm_section` / `Confirm-Section` no longer stop at `Proceed? [Y/n]` before each of the three sm-welcome bootstrap sections — they print the header and continue (matches sm-welcome `v0.1.10` dropping its per-step Proceed gate). `SM_WELCOME_CONFIRM=1` restores the gate; `SM_WELCOME_ASSUME_YES=1` (the old non-interactive override) still forces auto-accept over it, so existing CI/scripted callers are unaffected. `sm-welcome.ps1` forwards `SM_WELCOME_CONFIRM` across the UAC re-exec like its siblings. |
 | v0.1.0 | 2026-06-17 | Greg Gowans | Baseline under the enterprise versioning scheme; retired the legacy flat `v0.0.N` tag stream and refreshed this appendix to the build-once / carried-NNN policy. |
 
 ---

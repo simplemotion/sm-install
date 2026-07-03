@@ -120,8 +120,11 @@ function Invoke-Pwsh7Guard {
 function Confirm-Section($title) {
     Write-Host ""
     Write-Host ("  -- {0} {1}" -f $title, ('-' * [Math]::Max(0, 56 - $title.Length)))
-    if ($env:SM_WELCOME_ASSUME_YES) {
-        Write-Host "  [+] Proceeding (SM_WELCOME_ASSUME_YES set)" -ForegroundColor DarkGray
+    # Auto-proceed by default — matches sm-welcome v0.1.10 dropping its
+    # per-step Proceed gate. SM_WELCOME_CONFIRM=1 restores the prompt;
+    # SM_WELCOME_ASSUME_YES=1 (the old non-interactive override) still
+    # wins over it for existing CI/scripted callers.
+    if ($env:SM_WELCOME_ASSUME_YES -or -not $env:SM_WELCOME_CONFIRM) {
         return
     }
     $resp = Read-Host "  Proceed? [Y/n]"

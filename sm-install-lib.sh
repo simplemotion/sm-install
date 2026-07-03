@@ -10,8 +10,9 @@
 #   eval "$(curl -fsSL https://install.simplemotion.com/sm-install-lib.sh)"
 #
 # Functions:
-#   confirm_section          Section-gated Y/n prompt with framed header.
-#                            SM_WELCOME_ASSUME_YES=1 bypasses the prompt.
+#   confirm_section          Framed section header; proceeds automatically.
+#                            SM_WELCOME_CONFIRM=1 restores the Y/n gate
+#                            (SM_WELCOME_ASSUME_YES=1 overrides it back off).
 #   find_cosign              Probe ~/.local/bin/cosign and nothing else
 #                            (100%-local toolchain rule — system-wide
 #                            cosigns from Homebrew / apt / dnf are
@@ -78,8 +79,13 @@ confirm_section() {
     printf '\n  ── %s ' "$title"
     printf -- '─%.0s' $(seq 1 "$pad")
     printf '\n'
-    if [[ -n "${SM_WELCOME_ASSUME_YES:-}" ]]; then
-        printf '  [+] Proceeding (SM_WELCOME_ASSUME_YES set)\n'
+    # Auto-proceed by default — the section gates made a fresh onboarding
+    # three extra Enter presses for no decision the user could make
+    # (matches sm-welcome v0.1.10 dropping its per-step Proceed gate).
+    # SM_WELCOME_CONFIRM=1 restores the prompt; SM_WELCOME_ASSUME_YES=1
+    # (the old non-interactive override) still wins over it for existing
+    # CI/scripted callers.
+    if [[ -n "${SM_WELCOME_ASSUME_YES:-}" || -z "${SM_WELCOME_CONFIRM:-}" ]]; then
         return 0
     fi
     local resp

@@ -29,8 +29,9 @@
 #                      (using ~/.local/bin/pwsh-7/pwsh.exe) so the user
 #                      lands in the modern shell going forward.
 #
-# Non-interactive override: set $env:SM_WELCOME_ASSUME_YES=1 to auto-accept
-# every section prompt (used by CI / unattended re-runs).
+# Section prompts auto-accept by default. Set $env:SM_WELCOME_CONFIRM=1 to
+# gate each section behind Proceed? [Y/n]; $env:SM_WELCOME_ASSUME_YES=1 (the
+# old non-interactive override) still forces auto-accept over it.
 #
 # Section 3 launches sm-welcome.exe in an *elevated* pwsh 7 console by
 # default so the binary's step 00-preflight can write LongPathsEnabled
@@ -340,7 +341,7 @@ if ($pwshPath) {
     $envForward = @(
         'SM_EMAIL', 'SM_CHANNEL', 'SM_INSTALL_DIR', 'TUF_ROOT',
         'SM_WELCOME_NO_BANNER', 'SM_WELCOME_STEPS_OFFSET', 'SM_WELCOME_STEPS_TOTAL',
-        'SM_WELCOME_ASSUME_YES', 'SM_WELCOME_CLEAN', 'SM_WELCOME_SKIP_FAST_PATH'
+        'SM_WELCOME_ASSUME_YES', 'SM_WELCOME_CONFIRM', 'SM_WELCOME_CLEAN', 'SM_WELCOME_SKIP_FAST_PATH'
     )
     $envPrefix = @()
     foreach ($name in $envForward) {
