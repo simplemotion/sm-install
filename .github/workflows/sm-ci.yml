@@ -1,0 +1,33 @@
+# SimpleMotion canonical CI — copy this verbatim to
+# .github/workflows/sm-ci.yml in any repo. It is IDENTICAL in every repo;
+# all per-repo behaviour (version, develop tag, build matrix, assets,
+# Rust-vs-config) is auto-derived by the reusable workflow.
+#
+# Scope: push to main + version tags ONLY. Pull-request validation
+# (hygiene + build/test/fmt/clippy/deny/doc) lives in the sibling
+# simplemotion/sm-pr workflow — add its caller stub as a separate
+# .github/workflows/sm-pr.yml. sm-ci no longer runs on pull_request, so the
+# two don't double-build a PR.
+#
+# The `permissions: contents: write` is required: reusable workflows cannot
+# escalate beyond what the caller grants, and the org default is read-only,
+# so the develop-tag stamp + release publish need the caller to grant it.
+#
+# Pinning: callers track @main (decided 2026-06-15) — a fix in sm-ci reaches
+# the whole fleet at once. See README.md "Versioning & pinning".
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: write      # stamp develop tags
+  id-token: write       # SLSA attestation (sigstore)
+  attestations: write
+
+jobs:
+  ci:
+    uses: simplemotion/sm-ci/.github/workflows/sm-ci.yml@main
+    secrets: inherit
