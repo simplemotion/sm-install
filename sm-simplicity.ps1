@@ -31,6 +31,6 @@ Write-Host ""
 $installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1')
 $sb = [ScriptBlock]::Create($installer)
 & $sb -Package 'sm-simplicity' `
-      -SourceRepo '3400-0000-SM-Software/3400-0026-SM-Simplicity' `
+      -SourceRepo '3404-0000-SM-Simplicity-v04/3404-0001-SM-Simplicity' `
       -TagPrefix 'sm-simplicity-v' `
       -Mode 'install'

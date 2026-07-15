@@ -8,7 +8,8 @@
 #   SM_CHANNEL=preview bash -c "$(curl -fsSL https://install.simplemotion.com/sm-simplicity.sh)" sm-simplicity
 #
 # Channel selection via SM_CHANNEL (release | preview); default release.
-# Tier selection (one/two/six) happens at runtime via `sm-simplicity` args.
+# Installs the Simplicity v04 HMI (Rust + Slint; the legacy tier launchers
+# from 3400-0026 are retired — that repo is archived).
 
 set -euo pipefail
 
@@ -23,7 +24,7 @@ printf '\n  SimpleMotion — Simplicity Installer\n  ═════════
 INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")
 exec bash -c "$INSTALL_SH" install \
     --package sm-simplicity \
-    --source-repo 3400-0000-SM-Software/3400-0026-SM-Simplicity \
+    --source-repo 3404-0000-SM-Simplicity-v04/3404-0001-SM-Simplicity \
     --tag-prefix sm-simplicity-v \
     --asset-suffix short \
     --mode install
