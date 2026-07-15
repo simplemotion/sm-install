@@ -86,6 +86,12 @@ curl() { command curl --tlsv1.2 "$@"; }
 # cross-host redirect, so it's safe even though release-asset downloads
 # redirect off api.github.com. Use ONLY for api.github.com calls.
 SM_GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+# The develop/testing channels live in non-public repos ("requires authed
+# gh" per README). When no token env is set, borrow gh's stored token so
+# the documented `gh auth login` path just works.
+if [ -z "$SM_GH_TOKEN" ] && command -v gh >/dev/null 2>&1; then
+    SM_GH_TOKEN=$(gh auth token 2>/dev/null || true)
+fi
 gh_api() {
     # --retry rides out transient api.github.com failures (5xx/429/connection
     # resets) so a momentary blip isn't misread as "no release published yet".
@@ -239,6 +245,31 @@ fi
 
 URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 
+# Download one named asset of the resolved release to a path. Public
+# channel repos (sm-release, sm-preview) serve the plain browser
+# download URL. The internal/private channels (sm-develop, sm-testing)
+# 404 on it for everyone, so with a token present resolve the asset's
+# API url from the release JSON and fetch it as an octet-stream; fall
+# back to the browser URL when unauthenticated or the asset is missing.
+RELEASE_ASSETS_JSON=""
+download_asset() {
+    asset_name="$1"; out_path="$2"
+    if [ -n "$SM_GH_TOKEN" ]; then
+        if [ -z "$RELEASE_ASSETS_JSON" ]; then
+            RELEASE_ASSETS_JSON=$(gh_api "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" 2>/dev/null || true)
+        fi
+        asset_url=$(awk -v n="\"name\": \"${asset_name}\"" '
+            /"url": *"https:\/\/api\.github\.com\/repos\/.*\/releases\/assets\// {
+                u=$0; sub(/.*"url": *"/,"",u); sub(/".*/,"",u)
+            }
+            index($0, n) { print u; exit }' <<<"$RELEASE_ASSETS_JSON")
+        if [ -n "$asset_url" ] && curl -fsSL --retry 3 --retry-delay 2                 -H "Authorization: Bearer $SM_GH_TOKEN"                 -H "Accept: application/octet-stream"                 "$asset_url" -o "$out_path"; then
+            return 0
+        fi
+    fi
+    curl -fsSL "https://github.com/${REPO}/releases/download/${TAG}/${asset_name}" -o "$out_path"
+}
+
 # TTY-aware colours.
 if [[ -t 1 ]]; then
     GREEN=$'\e[92m'; RED=$'\e[91m'; DIM=$'\e[38;5;244m'; BOLD=$'\e[1m'; RESET=$'\e[0m'; ERASE=$'\r\e[K'
@@ -281,14 +312,14 @@ if [[ -t 1 ]]; then
 else
     printf '  [*] %s Downloading %s...\n' "$(fmt_step 2)" "$PACKAGE"
 fi
-if ! curl -fsSL "$URL" -o "$TMPBIN"; then
+if ! download_asset "$ASSET" "$TMPBIN"; then
     printf '%s  [%s✗%s] Failed to download %s\n' "$ERASE" "$RED" "$RESET" "$URL" >&2
     exit 1
 fi
 printf '%s  [%s✓%s] %s Downloaded %s\n' "$ERASE" "$GREEN" "$RESET" "$(fmt_step 2)" "$ASSET"
 
 # Download + verify SHA256.
-if ! curl -fsSL "${URL}.sha256" -o "$TMPSUM"; then
+if ! download_asset "${ASSET}.sha256" "$TMPSUM"; then
     printf '  [%s✗%s] Failed to download %s.sha256\n' "$RED" "$RESET" "$URL" >&2
     exit 1
 fi
@@ -323,7 +354,7 @@ export TUF_ROOT
 # directly without sm-welcome.sh's Section 1 having provisioned it).
 # Both ensure_cosign and initialize_cosign_tuf come from sm-install-lib.sh.
 find_cosign || true
-if curl -fsSL "${URL}.sigstore.jsonl" -o "$TMPATT" 2>/dev/null; then
+if download_asset "${ASSET}.sigstore.jsonl" "$TMPATT" 2>/dev/null; then
     if [[ -z "$COSIGN_BIN" ]]; then
         printf '      [*] cosign not on disk — bootstrapping...\n'
         if ensure_cosign; then
