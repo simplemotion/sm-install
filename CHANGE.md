@@ -25,7 +25,7 @@ Before this baseline `sm-install` used an undocumented flat `v0.0.N` tag stream 
 
 # Appendix — Enterprise versioning policy
 
-Adopted 2026-05-12; revised 2026-06-14 to add the per-commit `-develop-` tag stream and the `-release-` candidate stage (superseding the earlier `-cm-` CI-only label), and to add the monorepo-workspace rule (one repo-wide version + a single bare tag, no per-package prefix); revised 2026-06-15 to record develop builds in `CHANGE.md` (one row per notable change, keyed by the `-develop-NNN` tag), clarifying that "no GitHub Release" governs distribution, not changelog listing; reconciled 2026-06-15 to the live channel architecture — `-develop-` publishes to the internal `sm-develop` channel for distribution-surface products (tag/version-only for internal crates), and all channel/distribution specifics are deferred to the Distribution Standard (`9000-…-SM-Govern/CLAUDE.md`) as the single source of truth; revised 2026-06-17 to the **build-once / carried-NNN** model implemented in `simplemotion/sm-ci` — `develop` is the single build (one artifact per commit on `main`), each later stage **promotes that same artifact** so its `-develop-NNN` number is **carried unchanged** up the ladder, and `-release-NNN` is **restored** as a staging candidate (prerelease) finalised to the bare `vX.Y.Z` GA (the only "latest"); revised 2026-07-03 to require every hand-cut named tag to be an **annotated tag object** (`git tag -a` — lightweight tags lose `git describe` priority to CI's annotated develop tags). Supersedes the 4-component `W.X.Y.Z` scheme used before. This section is reproduced verbatim in every SimpleMotion repo's `CHANGE.md` so each file is self-contained.
+Adopted 2026-05-12; revised 2026-06-14 to add the per-commit `-develop-` tag stream and the `-release-` candidate stage (superseding the earlier `-cm-` CI-only label), and to add the monorepo-workspace rule (one repo-wide version + a single bare tag, no per-package prefix); revised 2026-06-15 to record develop builds in `CHANGE.md` (one row per notable change, keyed by the `-develop-NNN` tag), clarifying that "no GitHub Release" governs distribution, not changelog listing; reconciled 2026-06-15 to the live channel architecture — `-develop-` publishes to the internal `sm-develop` channel for distribution-surface products (tag/version-only for internal crates), and all channel/distribution specifics are deferred to the Distribution Standard (`9000-…-SM-Govern/CLAUDE.md`) as the single source of truth; revised 2026-06-17 to the **build-once / carried-NNN** model implemented in `simplemotion/sm-ci` — `develop` is the single build (one artifact per commit on `main`), each later stage **promotes that same artifact** so its `-develop-NNN` number is **carried unchanged** up the ladder, and `-release-NNN` is **restored** as a staging candidate (prerelease) finalised to the bare `vX.Y.Z` GA (the only "latest"); revised 2026-07-03 to require every hand-cut named tag to be an **annotated tag object** (`git tag -a` — lightweight tags lose `git describe` priority to CI's annotated develop tags); revised 2026-07-22 to make version derivation **canonical in `simplemotion/sm-ci`** (inlined in its `version` job) rather than a separately-sourced `sm-version.sh`, and to derive the pre-GA develop base from the **crate manifest's `X.Y.Z`** (falling back to `v0.1.0` for repos with no parseable version) instead of a hardcoded `v0.1.0`. Supersedes the 4-component `W.X.Y.Z` scheme used before. This section is reproduced verbatim in every SimpleMotion repo's `CHANGE.md` so each file is self-contained.
 
 ## TL;DR
 
@@ -113,19 +113,13 @@ v0.1.1                 # finalise release-003 → GA       (bare; the only "late
 
 ## Version computation in CI
 
-Every repo's CI workflow sources `scripts/sm-version.sh` from the canonical `.claude` clone:
+Version derivation is **owned by the canonical reusable workflow `simplemotion/sm-ci`** (inlined in its `version` job); repos consume it via the one-line caller stub, with no separately-sourced script. It computes:
 
-```bash
-source ~/SimpleMotion/.claude/scripts/sm-version.sh
-VERSION=$(sm_version)
-```
-
-The script returns:
 - The current tag verbatim if HEAD is on a `v*` tag (a clean GA tag is preferred over a prerelease pointing at the same commit).
 - Otherwise `<base>-develop-<count>` where `<base>` is one patch ahead of the most recent clean GA release reachable from HEAD, and `<count>` is commits since that release.
-- Before the first GA release (no clean `vX.Y.Z` tag exists yet), `<base>` is **`v0.1.0`** — the policy-mandated first release — and `<count>` is commits from the root, so the initial dev stream is `v0.1.0-develop-NNN` (never `v0.0.x`).
+- Before the first GA release (no reachable `vX.Y.Z` tag), `<base>` is the crate manifest's `X.Y.Z` (the `Cargo.toml` version before any `-develop` suffix), falling back to **`v0.1.0`** only when no version is parseable (e.g. non-Rust / config repos); `<count>` is commits from the root, so the initial dev stream is `<manifest X.Y.Z>-develop-NNN` (never `v0.0.x`).
 
-See `scripts/sm-version.sh` in the canonical `.claude` repo for the implementation.
+See the `version` job of the `simplemotion/sm-ci` reusable workflow for the implementation.
 
 ## Monorepo workspaces (multiple crates / packages in one repo)
 
@@ -149,8 +143,8 @@ of truth), rather than deriving it in CI as a single-binary repo does:
   each binary's `--version` (`CARGO_PKG_VERSION`) in lockstep.
 
 **Why this differs from the single-package default.** For one shipped binary
-the develop stream is **CI-owned** — auto-stamped per commit, version from
-`sm-version.sh`, manifest holding only the base `X.Y.Z`. A workspace of
+the develop stream is **CI-owned** — auto-stamped per commit, version derived
+by `simplemotion/sm-ci` from the manifest's base `X.Y.Z`. A workspace of
 internal, cargo-installed crates instead keeps the unified version **in the
 manifests** and advances it with the bump helper: every crate gets one coherent
 version that `cargo`, the git tag, and `--version` all agree on, without
@@ -169,9 +163,9 @@ concern; build and promotion are distribution's (below).
    untagged commit it is the next develop build:
    - `<base>-develop-<count>`, where `<base>` is one patch ahead of the most
      recent reachable clean GA release and `<count>` counts commits since it;
-   - before the first GA (no clean `vX.Y.Z` tag exists yet) `<base>` is **`v0.1.0`**
-     and `<count>` counts commits from the root, so the initial stream is
-     `v0.1.0-develop-NNN` (never `v0.0.x`).
+   - before the first GA (no reachable `vX.Y.Z` tag) `<base>` is the crate
+     manifest's `X.Y.Z` (falling back to **`v0.1.0`** when unparseable, e.g.
+     non-Rust / config repos) and `<count>` counts commits from the root.
 2. **The develop tag.** Every push to `main` stamps `v<next>-develop-NNN` — CI
    owns it (a `GITHUB_TOKEN` push, so it never recursively re-triggers). In a
    workspace the bump helper advances it instead (see the monorepo rule).
@@ -189,7 +183,7 @@ if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
     *)           STAGE=ga ;;        # bare vX.Y.Z — the only "latest"
   esac
 else                                # untagged commit on main → next develop build
-  VERSION="$(sm_version)"; STAGE=develop   # sm-version.sh; see "Version computation"
+  VERSION="$(derive_develop)"; STAGE=develop  # inlined in simplemotion/sm-ci; see "Version computation"
 fi
 ```
 
