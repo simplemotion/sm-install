@@ -25,7 +25,7 @@ Before this baseline `sm-install` used an undocumented flat `v0.0.N` tag stream 
 
 # Appendix — Enterprise versioning policy
 
-Adopted 2026-05-12; revised 2026-06-14 to add the per-commit `-develop-` tag stream and the `-release-` candidate stage (superseding the earlier `-cm-` CI-only label), and to add the monorepo-workspace rule (one repo-wide version + a single bare tag, no per-package prefix); revised 2026-06-15 to record develop builds in `CHANGE.md` (one row per notable change, keyed by the `-develop-NNN` tag), clarifying that "no GitHub Release" governs distribution, not changelog listing; reconciled 2026-06-15 to the live channel architecture — `-develop-` publishes to the internal `sm-develop` channel for distribution-surface products (tag/version-only for internal crates), and all channel/distribution specifics are deferred to the Distribution Standard (`9000-…-SM-Govern/CLAUDE.md`) as the single source of truth; revised 2026-06-17 to the **build-once / carried-NNN** model implemented in `simplemotion/sm-ci` — `develop` is the single build (one artifact per commit on `main`), each later stage **promotes that same artifact** so its `-develop-NNN` number is **carried unchanged** up the ladder, and `-release-NNN` is **restored** as a staging candidate (prerelease) finalised to the bare `vX.Y.Z` GA (the only "latest"); revised 2026-07-03 to require every hand-cut named tag to be an **annotated tag object** (`git tag -a` — lightweight tags lose `git describe` priority to CI's annotated develop tags); revised 2026-07-22 to make version derivation **canonical in `simplemotion/sm-ci`** (inlined in its `version` job) rather than a separately-sourced `sm-version.sh`, and to derive the pre-GA develop base from the **crate manifest's `X.Y.Z`** (falling back to `v0.1.0` for repos with no parseable version) instead of a hardcoded `v0.1.0`. Supersedes the 4-component `W.X.Y.Z` scheme used before. This section is reproduced verbatim in every SimpleMotion repo's `CHANGE.md` so each file is self-contained.
+Adopted 2026-05-12; revised 2026-06-14 to add the per-commit `-develop-` tag stream and the `-release-` candidate stage (superseding the earlier `-cm-` CI-only label), and to add the monorepo-workspace rule (one repo-wide version + a single bare tag, no per-package prefix); revised 2026-06-15 to record develop builds in `CHANGE.md` (one row per notable change, keyed by the `-develop-NNN` tag), clarifying that "no GitHub Release" governs distribution, not changelog listing; reconciled 2026-06-15 to the live channel architecture — `-develop-` publishes to the internal `sm-develop` channel for distribution-surface products (tag/version-only for internal crates), and all channel/distribution specifics are deferred to the Distribution Standard (`9000-…-SM-Govern/CLAUDE.md`) as the single source of truth; revised 2026-06-17 to the **build-once / carried-NNN** model implemented in `simplemotion/sm-ci` — `develop` is the single build (one artifact per commit on `main`), each later stage **promotes that same artifact** so its `-develop-NNN` number is **carried unchanged** up the ladder, and `-release-NNN` is **restored** as a staging candidate (prerelease) finalised to the bare `vX.Y.Z` GA (the only "latest"); revised 2026-07-03 to require every hand-cut named tag to be an **annotated tag object** (`git tag -a` — lightweight tags lose `git describe` priority to CI's annotated develop tags); revised 2026-07-22 to make version derivation **canonical in `simplemotion/sm-ci`** (inlined in its `version` job) rather than a separately-sourced `sm-version.sh`, and to derive the pre-GA develop base from the **crate manifest's `X.Y.Z`** (falling back to `v0.1.0` for repos with no parseable version) instead of a hardcoded `v0.1.0`. revised 2026-07-29 to allow an **admin-authorised retraction** of the tag anti-patterns, subject to the never-consumed checks and a `CHANGE.md` record. revised 2026-07-29 to fix the changelog table format — `Version | Hash | Date | Author | Notes`, with the commit hash required on every entry, dates carrying UTC time (`YYYY-MM-DD HH:MM UTC`) and never local, and the author always the full `user.name`. Supersedes the 4-component `W.X.Y.Z` scheme used before. This section is reproduced verbatim in every SimpleMotion repo's `CHANGE.md` so each file is self-contained.
 
 ## TL;DR
 
@@ -108,7 +108,7 @@ v0.1.1                 # finalise release-003 → GA       (bare; the only "late
 - **Never invent a new `NNN` for a later stage.** The promotion carries the develop build's number unchanged — `-testing-`/`-preview-`/`-release-` all share the `-develop-NNN` they came from. Same number = same artifact.
 - **Three-digit zero-padding** is mandatory. Without it, `-release-10` sorts before `-release-2` lexically.
 - **Every hand-cut tag is annotated** — `git tag -a vX.Y.Z -m "…"` (likewise `-testing-`/`-preview-`/`-release-NNN`), never lightweight. Annotated tags carry tagger/date and take `git describe` priority; a lightweight GA on a commit that also bears CI's annotated `-develop-NNN` tag describes as the develop twin instead of the GA. CI's auto-cut develop tags are already annotated.
-- **Never move a tag once pushed.** Promote a *new* develop build (new `NNN`) if you need to revise; cut a new patch for GA.
+- **Never move a tag once pushed.** Promote a *new* develop build (new `NNN`) if you need to revise; cut a new patch for GA. Retraction is possible only with admin authorisation and the never-consumed checks — see *Yanking a broken release*.
 - **Only the develop tag originates on `main`** (or a `release/v*.x` branch). The cut stages are promotions; they don't add new source-repo tags.
 
 ## Version computation in CI
@@ -199,9 +199,23 @@ used — they would bypass the build-once split. See the Distribution Standard a
 
 One row per **notable change** — keyed by the `-develop-NNN` tag of the commit that shipped it, or by a named GA / release / preview / testing tag once one is cut. Trivial commits (typo- or format-only) need not get a row; the per-commit `-develop-NNN` tag stream plus the commit log remain the full audit trail.
 
+**Table columns**, in this order — the same shape the pre-2026-05-12 tables used:
+
+```
+| Version | Hash | Date | Author | Notes |
+```
+
+- **Version** — the tag keying the row, or `—` where the change shipped without one.
+- **Hash** — the **abbreviated commit hash** (7 chars) of the commit that shipped it. Required for every entry: the tag alone does not identify a commit once tags are re-cut or withdrawn, and rows keyed `—` have no other anchor.
+- **Date** — UTC, `YYYY-MM-DD HH:MM UTC`. **Always UTC, never local.** Derive it with `TZ=UTC git log --date=format-local:'%Y-%m-%d %H:%M UTC'`; `--date=format-local` alone renders *local* time and will silently mislabel it (an AEST author is +10, so it lands ten hours off).
+- **Author** — **always the full name**, exactly as configured in `user.name` for that repo's identity (e.g. `Greg Gowans`, never `Greg`). The changelog author must match the commit author it describes.
+- **Notes** — one line, or a fuller paragraph for a notable change.
+
+**Backfilling older rows.** Where a row predates this format and its commit cannot be identified — the tag was never cut, or the row is keyed by a product version rather than a git tag — put `—` in **Hash** and leave the date at whatever precision is known. **Never guess a hash or a time**: a wrong hash is worse than an absent one, because it points confidently at the wrong commit.
+
 **Edits per change:**
 
-1. **Develop:** land the commit on `main`; CI stamps its `-develop-NNN` tag automatically (never tag develop by hand). Prepend one row to the changelog table with that tag, date (UTC `YYYY-MM-DD`), author, and a one-line note.
+1. **Develop:** land the commit on `main`; CI stamps its `-develop-NNN` tag automatically (never tag develop by hand). Prepend one row to the changelog table with that tag, the abbreviated commit hash, date (UTC `YYYY-MM-DD HH:MM UTC`), author (full name), and a one-line note.
 2. **Named stages:** when you cut a testing / preview / release / GA tag by hand, push it and add its row the same way. When a candidate promotes to GA, all rows remain (audit trail of the cycle).
 3. **Never edit a row after its tag is published.** Append a new row instead.
 
@@ -267,6 +281,19 @@ Steps for a broken `v0.1.1`:
 
 The one exception: a pre-release tag that **never escaped CI** (no external pull, no registry publish) can be safely deleted. Default to superseding anyway — `-preview-002` costs nothing.
 
+**Admin-authorised retraction.** An organisation admin may explicitly authorise one of the anti-patterns above — most often deleting a tag cut prematurely, or withdrawing a GA that turns out not to be ready to release. This is an *authorisation*, not a safety argument: none of the technical risks above go away, so it is only appropriate where the tag demonstrably has not been consumed.
+
+Before acting, confirm all four:
+
+1. **No GitHub Release** exists for the tag (a tag alone distributes nothing; a Release does).
+2. **No registry publish** happened from this repo for that version.
+3. **Nothing could have fetched it** — for a private repo, no forks, watchers or network; for a public one, assume it *was* fetched and supersede instead.
+4. **It was not promoted** to a later stage (`-testing-`/`-preview-`/`-release-`/GA carrying the same `NNN`).
+
+Then **record the retraction in `CHANGE.md`** — which admin authorised it, the date, and the four checks — so the tag's disappearance is visible in the record instead of looking like it silently vanished. Re-cutting the same version number for different content remains forbidden regardless of authorisation: retract, then move to a *new* number.
+
+If any of the four fails, the admin's authorisation does not make it safe. Supersede.
+
 ## Migration from the legacy `W.X.Y.Z` scheme
 
 Each repo's `CHANGE.md` is migrated as follows:
@@ -284,5 +311,6 @@ A repo conforms to this policy when:
 - A given `NNN` is shared by the develop build and every stage promoted from it (same `NNN` = same artifact); no stage invents its own counter.
 - Every hand-cut named tag (testing / preview / release / GA) is an annotated tag object (`git cat-file -t <tag>` → `tag`), never a lightweight commit ref.
 - `CHANGE.md` carries the changelog table at the top and this policy appendix at the bottom, with legacy entries (if any) between them under a divider.
+- The changelog table carries the columns `Version | Hash | Date | Author | Notes`; every row has a hash (or an explicit `—`), every date is UTC with time, and every author is a full name.
 - The repo's CI is the canonical `simplemotion/sm-ci` (version derivation + develop tag + build-once at develop); promotions up the ladder are each channel repo's `sm-promote.yml`. No local publish/`gh release` step.
 - No commit on `main` or a release branch is tagged with the retired `W.X.Y.Z` format.
