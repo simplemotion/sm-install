@@ -327,6 +327,47 @@ if (-not $skipDownload) {
         Write-Host ""
         exit 1
     }
+
+}
+
+# -- sm-onboard --------------------------------------------------------
+# Ships from the same workspace and the same release, and lands beside
+# sm-welcome in ~/.simplemotion/bin. It is the admin-run onboarding CLI:
+# sm-welcome's own home-repo step failure tells the operator to run
+# `sm-onboard <cohort> adduser ...`, which until now nothing ever installed -
+# it just assumed the binary was on PATH.
+#
+# Runs when we already downloaded sm-welcome, OR when sm-onboard is simply
+# absent. That second case is what reaches existing installs: the fast path
+# above skips the download entirely when sm-welcome is already this channel's
+# latest, so gating solely on it would never deliver sm-onboard to anyone
+# already up to date. Version comparison is not an option here - sm-onboard
+# reports its own crate version (0.1.0), not the workspace release tag.
+#
+# NON-FATAL by design. Releases cut before simplemotion/sm-ci#28 carry no
+# sm-onboard asset at all (the build never passed --workspace, so the binary was
+# enumerated, not found, and dropped). Making this fatal would break every
+# install from an existing release, on every channel, until each is re-cut.
+# A workstation without sm-onboard is fully functional - only admins invoke it.
+$onboardBin = Join-Path $installDir 'sm-onboard.exe'
+if ((-not $skipDownload) -or (-not (Test-Path $onboardBin))) {
+    if (-not $sb) {
+        $installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1')
+        $sb = [ScriptBlock]::Create($installer)
+    }
+    & $sb -Package 'sm-onboard' `
+          -AssetSuffix 'short' `
+          -SourceRepo '3400-0000-SM-Software/3400-0009-SM-Welcome' `
+          -Channel $channel `
+          -Mode 'install'
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host ("  [!] sm-onboard was not installed from the {0} channel - continuing." -f $channel) -ForegroundColor Yellow
+        Write-Host "      Expected if this release predates simplemotion/sm-ci#28, which is what"
+        Write-Host "      first built workspace members. Admins can re-run this installer after the"
+        Write-Host "      next release on that channel; everyone else does not need it."
+        Write-Host ""
+    }
 }
 
 # -- Section 3: Launch -------------------------------------------------
