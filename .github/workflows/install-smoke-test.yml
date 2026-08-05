@@ -1,10 +1,26 @@
 name: install-smoke-test
 
-# Smoke test for the public installer: on each OS, install sm-welcome from
-# the release channel via the generic installer and assert that (1) cosign
+# Smoke test for the public installer: on ubuntu + macOS, install sm-welcome
+# from the release channel via the generic installer and assert that (1) cosign
 # provenance verifies and (2) the binary runs. Guards against regressions
 # like the sm-ci signer-identity mismatch fixed in #31. Mode=install only —
 # no interactive onboarding (that's sm-welcome.{sh,ps1}'s Section 3).
+#
+# WINDOWS JOBS REMOVED 2026-08-05. `windows-pwsh` and `windows-ps51` installed
+# sm-welcome.exe and asserted it ran. 3400-0009-SM-Welcome dropped its two
+# *-pc-windows-msvc triples that day, so no sm-welcome.exe is published any
+# more and both jobs would fail on a missing asset — a red schedule every
+# Monday testing a platform we no longer ship.
+#
+# The .ps1 path filters went with them: with no job exercising sm-install.ps1
+# or sm-install-lib.ps1, triggering a run on their changes only produced a
+# green tick that proved nothing. Restore both together if Windows returns.
+#
+# NOTE, still outstanding: sm-install.ps1 and sm-welcome.ps1 are unchanged and
+# still served from install.simplemotion.com, so a Windows user following the
+# documented one-liner now fails on a missing release asset rather than being
+# told Windows is unsupported. Deciding that message is a product call, not a
+# CI one — see 3400-0009-SM-Welcome's CHANGE.md entry for the same note.
 
 on:
   workflow_dispatch:
@@ -14,9 +30,7 @@ on:
     branches: [main]
     paths:
       - 'sm-install.sh'
-      - 'sm-install.ps1'
       - 'sm-install-lib.sh'
-      - 'sm-install-lib.ps1'
       - '.github/workflows/install-smoke-test.yml'
 
 permissions:
@@ -31,38 +45,6 @@ env:
   GH_TOKEN: ${{ github.token }}
 
 jobs:
-  windows-pwsh:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install + verify (PowerShell 7)
-        shell: pwsh
-        run: |
-          $log = & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install *>&1
-          $log | ForEach-Object { Write-Host $_ }
-          if ($LASTEXITCODE -ne 0) { throw "installer exit $LASTEXITCODE" }
-          if (-not ($log -join "`n" | Select-String -Quiet 'Provenance verified')) { throw 'provenance NOT verified' }
-          & (Join-Path $HOME '.simplemotion/bin/sm-welcome.exe') -V
-          if ($LASTEXITCODE -ne 0) { throw "binary -V exit $LASTEXITCODE" }
-
-  windows-ps51:
-    # Starts under Windows PowerShell 5.1; the ASCII pwsh-7 guard should find
-    # pwsh 7 (preinstalled on the runner) and relaunch the install under it.
-    # Assert via exit code + installed binary (the relaunch crosses a process
-    # boundary, so the child's Write-Host output isn't captured here).
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install (start in Windows PowerShell 5.1, relaunch to pwsh 7)
-        shell: powershell
-        run: |
-          & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short -SourceRepo $env:SRC -Channel $env:CH -Mode install
-          if ($LASTEXITCODE -ne 0) { throw "installer exit $LASTEXITCODE" }
-          $bin = Join-Path $HOME '.simplemotion/bin/sm-welcome.exe'
-          if (-not (Test-Path $bin)) { throw "sm-welcome.exe not installed at $bin" }
-          & $bin -V
-          if ($LASTEXITCODE -ne 0) { throw "binary -V exit $LASTEXITCODE" }
-
   unix:
     strategy:
       fail-fast: false
