@@ -1,4 +1,4 @@
-name: install-smoke-test
+name: sm-install-smoke-test
 
 # Smoke test for the public installer: on ubuntu + macOS, install sm-welcome
 # from the release channel via the generic installer and assert that (1) cosign
@@ -31,7 +31,7 @@ on:
     paths:
       - 'sm-install.sh'
       - 'sm-install-lib.sh'
-      - '.github/workflows/install-smoke-test.yml'
+      - '.github/workflows/sm-install-smoke-test.yml'
 
 permissions:
   contents: read
