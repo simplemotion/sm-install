@@ -1,0 +1,63 @@
+name: sm-install-smoke-test
+
+# Smoke test for the public installer: on ubuntu + macOS, install sm-welcome
+# from the release channel via the generic installer and assert that (1) cosign
+# provenance verifies and (2) the binary runs. Guards against regressions
+# like the sm-ci signer-identity mismatch fixed in #31. Mode=install only —
+# no interactive onboarding (that's sm-welcome.{sh,ps1}'s Section 3).
+#
+# WINDOWS JOBS REMOVED 2026-08-05. `windows-pwsh` and `windows-ps51` installed
+# sm-welcome.exe and asserted it ran. 3400-0009-SM-Welcome dropped its two
+# *-pc-windows-msvc triples that day, so no sm-welcome.exe is published any
+# more and both jobs would fail on a missing asset — a red schedule every
+# Monday testing a platform we no longer ship.
+#
+# The .ps1 path filters went with them: with no job exercising sm-install.ps1
+# or sm-install-lib.ps1, triggering a run on their changes only produced a
+# green tick that proved nothing. Restore both together if Windows returns.
+#
+# NOTE, still outstanding: sm-install.ps1 and sm-welcome.ps1 are unchanged and
+# still served from install.simplemotion.com, so a Windows user following the
+# documented one-liner now fails on a missing release asset rather than being
+# told Windows is unsupported. Deciding that message is a product call, not a
+# CI one — see 3400-0009-SM-Welcome's CHANGE.md entry for the same note.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 6 * * 1'   # Mondays 06:17 UTC
+  push:
+    branches: [main]
+    paths:
+      - 'sm-install.sh'
+      - 'sm-install-lib.sh'
+      - '.github/workflows/sm-install-smoke-test.yml'
+
+permissions:
+  contents: read
+
+env:
+  PKG: sm-welcome
+  SRC: 3400-0000-SM-Software/3400-0009-SM-Welcome
+  CH: release
+  # Authenticate the installer's api.github.com calls so shared-runner IPs
+  # don't hit the 60/hr unauthenticated rate limit (the macOS flake).
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install + verify (bash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          log=$(bash sm-install.sh --package "$PKG" --asset-suffix short --source-repo "$SRC" --channel "$CH" --mode install 2>&1) || { echo "$log"; exit 1; }
+          echo "$log"
+          echo "$log" | grep -q 'Provenance verified' || { echo 'provenance NOT verified' >&2; exit 1; }
+          "$HOME/.simplemotion/bin/sm-welcome" -V
