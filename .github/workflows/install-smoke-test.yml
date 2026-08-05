@@ -34,7 +34,7 @@ jobs:
   windows-pwsh:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install + verify (PowerShell 7)
         shell: pwsh
         run: |
@@ -52,7 +52,7 @@ jobs:
     # boundary, so the child's Write-Host output isn't captured here).
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install (start in Windows PowerShell 5.1, relaunch to pwsh 7)
         shell: powershell
         run: |
@@ -70,7 +70,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install + verify (bash)
         shell: bash
         run: |

@@ -1,0 +1,38 @@
+# Keeps GitHub Actions references current so a stale pin cannot sit unnoticed.
+#
+# Why this exists: a fleet audit on 2026-08-05 scanned 679 repos and found 55
+# stale action pins across 21 of them — including `actions/checkout@v4`, three
+# majors behind. Nothing was watching: no repo in the estate had a
+# `dependabot.yml` before that date.
+#
+# A moving tag (`@v4`, `@v2`) tracks the newest release WITHIN a major, so it
+# cannot deliver a major bump. Every drift the audit found was a major. That is
+# the gap this closes.
+#
+# Scope is `github-actions` only, deliberately. Adding `cargo` here would be a
+# separate decision with a different risk profile and much more noise; workflow
+# pins are the thing that just bit us.
+#
+# Updates are grouped into a single PR — ungrouped, a quiet week still opens
+# several PRs against a repo that runs its full gate on each.
+#
+# NOTE for verbatim develop-stream repos: `sm-pr.yml`'s "Develop counter bumped"
+# step fails when `v<version>` is already tagged, and Dependabot will not bump a
+# Cargo.toml counter. There, a Dependabot PR needs a counter bump before it can
+# land — `sm-develop-bump.py` does it.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Australia/Sydney
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+    groups:
+      actions:
+        patterns:
+          - "*"
