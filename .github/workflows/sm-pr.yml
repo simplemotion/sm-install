@@ -1,0 +1,202 @@
+# PR gate — INLINED, deliberately NOT the canonical sm-pr caller stub.
+#
+# Do not "restore" this to
+# `uses: simplemotion/sm-pr/.github/workflows/sm-pr.yml@main`.
+#
+# **This repo is public; `simplemotion/sm-pr` is internal.** GitHub does not
+# permit a public repository to call a reusable workflow from an internal or
+# private one. The call is refused before any job is created, so the run fails
+# at startup with zero jobs and nothing is validated.
+#
+# That is not a prediction — it already happened here. `sm-ci.yml` WAS the
+# canonical caller stub and failed at startup on every push from 2026-07-22 to
+# 2026-07-31: five consecutive runs, zero jobs, no develop tag stamped. See the
+# header of `sm-ci.yml` for the full diagnosis, including why billing was ruled
+# out. Adding the sm-pr caller stub would reproduce that failure exactly.
+#
+# `sm-install` must stay public: it serves install.simplemotion.com and the
+# bootstrap has to be fetchable anonymously. So the gate is inlined instead.
+#
+# Scope matches what the shared workflow would actually run here. sm-pr's Rust
+# job is gated on `Cargo.toml` + `rust-toolchain.toml`; this repo has neither,
+# so only the hygiene job would ever have run. Its blocking checks are
+# reproduced below step-for-step.
+#
+# Two advisory checks from the shared workflow are deliberately NOT inlined:
+#   - `Action versions are current` — ~100 lines of API querying whose whole
+#     job is to flag repos without Dependabot. This repo adopted Dependabot in
+#     #61, which fixes the drift rather than reporting it.
+#   - `ASSIGN.md matches canonical` / `versioning appendix` hash pins — these
+#     carry SHAs that must be bumped fleet-wide when canonical changes. A copy
+#     here would silently rot the moment the fleet moves, reporting drift that
+#     does not exist. The substantive ASSIGN.md content check below is kept,
+#     which is the part that catches the real defect class.
+#
+# CHECK-NAME NOTE: the fleet's contexts are `pr / Repo hygiene` (lowercase
+# `pr`, from the caller's job id). An inlined workflow has no caller wrapper,
+# so this produces `PR / Repo hygiene`. No ruleset on this repo requires a
+# status-check context today, so nothing breaks — but if one is ever added,
+# require the name this file actually emits.
+
+name: PR
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Repo hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Required top-level files present
+        run: |
+          set -euo pipefail
+          missing=0
+          for f in ASSIGN.md CHANGE.md CLAUDE.md README.md .gitignore; do
+            if [[ ! -f "$f" ]]; then
+              echo "::error file=$f::required top-level file missing"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: ASSIGN.md states the assignment, the licence and the copyright
+        run: |
+          set -euo pipefail
+          # Asserts substantive content rather than byte-comparing to canonical:
+          # a pinned blob SHA fails every repo the moment canonical changes,
+          # before a sweep can land. Robust to wording edits, still catches the
+          # real defect class (a 2026-08-04 audit found 203 of 414 ASSIGN.md
+          # files missing the MIT section and the copyright line).
+          fail=0
+          if ! grep -qF 'SimpleMotion.Global Pty Ltd' ASSIGN.md; then
+            echo "::error file=ASSIGN.md::no assignee named — must be SimpleMotion.Global Pty Ltd"
+            fail=1
+          fi
+          if ! grep -qE '^#+[[:space:]]*MIT License' ASSIGN.md; then
+            echo "::error file=ASSIGN.md::missing the MIT License section"
+            fail=1
+          fi
+          if ! grep -qE 'Copyright \(c\) [0-9]{4} SimpleMotion\.Global Pty Ltd' ASSIGN.md; then
+            echo "::error file=ASSIGN.md::missing the 'Copyright (c) <year> SimpleMotion.Global Pty Ltd' line"
+            fail=1
+          fi
+          if [ "$fail" != 0 ]; then
+            echo "::notice::canonical copy: 9000-0000-SM-Govern/9000-9001-SM-Dot-Claude-Base/ASSIGN.md"
+          fi
+          exit "$fail"
+
+      - name: .gitmodules declares path, url, branch on every entry
+        if: hashFiles('.gitmodules') != ''
+        run: |
+          python3 <<'PY'
+          import configparser, sys
+          cp = configparser.ConfigParser()
+          cp.read(".gitmodules")
+          fail = False
+          for section in cp.sections():
+              for key in ("path", "url", "branch"):
+                  if not cp.has_option(section, key):
+                      print(f"::error::{section} missing required key '{key}' in .gitmodules")
+                      fail = True
+          sys.exit(1 if fail else 0)
+          PY
+
+      - name: CHANGE.md has at least one version entry
+        run: |
+          set -euo pipefail
+          # SemVer 2.0.0 vX.Y.Z, optionally with a channel/-rc suffix, per the
+          # enterprise versioning policy. Legacy vW.X.Y.Z entries also pass.
+          if ! grep -qE 'v?[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+|-[a-z]+-[0-9]+|-rc-[0-9]+)?' CHANGE.md; then
+            echo "::error file=CHANGE.md::must contain at least one version (vX.Y.Z, vX.Y.Z-<channel>-NNN, vX.Y.Z-rc-NNN, or legacy vW.X.Y.Z)"
+            exit 1
+          fi
+
+      - name: CHANGE.md uses the canonical 5-column table
+        run: |
+          set -euo pipefail
+          # Canonical is `| Version | Hash | Date | Author | Notes |`. EVERY
+          # pre-appendix table is checked, not just the first — files typically
+          # carry two (main changelog + a retired `## Legacy` stream) and those
+          # drifted independently. Stops at the appendix marker, whose own table
+          # is held byte-identical to canonical by sm-reconcile-appendix.sh.
+          bad=$(awk '
+            /^#+[[:space:]]*[Aa]ppendix/ { exit }
+            /^\|[[:space:]]*Version[[:space:]]*\|/ {
+              n = gsub(/\|/, "|") - 1
+              if (n != 5) { print FNR }
+            }
+          ' CHANGE.md)
+          if [ -n "$bad" ]; then
+            while IFS= read -r ln; do
+              echo "::error file=CHANGE.md,line=${ln}::changelog table is not 5-column — expected | Version | Hash | Date | Author | Notes |"
+            done <<< "$bad"
+            exit 1
+          fi
+
+      - name: No bootstrap / rendered artefacts committed
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            case "$f" in
+              .placeholder|out/*|*.key|*.pem)
+                echo "::error file=$f::forbidden artefact committed (bootstrap or rendered file)"
+                fail=1
+                ;;
+            esac
+          done < <(git ls-files)
+          exit "$fail"
+
+      - name: SimpleMotion-authored scripts + workflows have sm- prefix
+        # Per DISTRIBUTE.md principle 9. Third-party installs keep upstream
+        # names but we don't track those; other .github/ yaml (issue templates,
+        # CODEOWNERS, dependabot) follows GitHub's mandated filenames and is
+        # exempt. Python importable modules may use `sm_*.py` since `-` is
+        # invalid in an identifier; shell/PowerShell/YAML get no exception.
+        #
+        # NOTE for this repo: the public entry points at the repo ROOT —
+        # sm-install.sh, sm-welcome.ps1, sm-simplicity.sh and friends — are
+        # already sm-prefixed, and are out of scope anyway (the check covers
+        # .sm-scripts/** and .github/workflows/*.yml). Their names are part of
+        # the published install URLs, so they must never be renamed to satisfy
+        # a lint.
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            base=$(basename "$f")
+            case "$f" in
+              *.py)
+                case "$base" in
+                  sm-*|sm_*) : ;;
+                  *)
+                    echo "::error file=$f::SimpleMotion-authored Python module must have an sm- or sm_ prefix per DISTRIBUTE.md principle 9 (rename to sm-${base} for standalone scripts, or sm_${base%.py}.py for importable modules)"
+                    fail=1
+                    ;;
+                esac
+                ;;
+              *)
+                case "$base" in
+                  sm-*) : ;;
+                  *)
+                    echo "::error file=$f::SimpleMotion-authored artefact must have an sm- prefix per DISTRIBUTE.md principle 9 (rename to sm-${base})"
+                    fail=1
+                    ;;
+                esac
+                ;;
+            esac
+          done < <(git ls-files \
+            '.sm-scripts/**/*.sh' \
+            '.sm-scripts/**/*.bash' \
+            '.sm-scripts/**/*.zsh' \
+            '.sm-scripts/**/*.py' \
+            '.sm-scripts/**/*.ps1' \
+            '.github/workflows/*.yml')
+          exit "$fail"
