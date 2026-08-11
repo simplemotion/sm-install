@@ -217,7 +217,27 @@ ASSET="${PACKAGE}-${SUFFIX}"
 #   - Multi-package channel repos (--tag-prefix set): scan the releases
 #     list and pick the newest tag matching the prefix; releases/latest
 #     may belong to a different package in the same repo.
+#
+# When no --tag-prefix is given we still LOOK for "${PACKAGE}-" first and
+# only fall back to releases/latest. That costs one extra API call and
+# makes resolution correct under either publishing scheme:
+#
+#   sm-publish-release.yml currently names sm-welcome's releases bare
+#   (`vX.Y.Z`) and everything else `${package}-vX.Y.Z`, because sm-welcome
+#   is the designated primary product and owns releases/latest on each
+#   channel. If that special case is ever removed, a bare releases/latest
+#   lookup starts returning whichever package published most recently —
+#   silently installing the wrong asset. Probing the prefix first means
+#   this script keeps working across that change in either direction,
+#   rather than needing to be deployed in lockstep with it.
 if [[ -z "$VERSION" ]]; then
+    # Probe the package-prefixed namespace before the bare pointer.
+    if [[ -z "$TAG_PREFIX" && -n "$PACKAGE" ]]; then
+        PROBE=$(gh_api "https://api.github.com/repos/${REPO}/releases" 2>/dev/null || true)
+        PROBE_TAG=$(awk -v prefix="${PACKAGE}-v" '
+                        /"tag_name":/ { if ($0 ~ ("\"" prefix)) { print $0; exit } }' <<<"$PROBE"                     | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+        [[ -n "$PROBE_TAG" ]] && TAG_PREFIX="${PACKAGE}-"
+    fi
     if [[ -n "$TAG_PREFIX" ]]; then
         RELEASES_JSON=$(gh_api "https://api.github.com/repos/${REPO}/releases" 2>/dev/null || true)
         TAG=$(awk -v prefix="$TAG_PREFIX" '
