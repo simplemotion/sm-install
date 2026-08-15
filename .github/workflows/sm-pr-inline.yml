@@ -260,18 +260,18 @@ jobs:
           exit "$fail"
 
       - name: SimpleMotion-authored scripts + workflows have sm- prefix
-        # Per DISTRIBUTE.md principle 9. Third-party installs keep upstream
-        # names but we don't track those; other .github/ yaml (issue templates,
-        # CODEOWNERS, dependabot) follows GitHub's mandated filenames and is
-        # exempt. Python importable modules may use `sm_*.py` since `-` is
-        # invalid in an identifier; shell/PowerShell/YAML get no exception.
+        # Per DISTRIBUTE.md principle 9 (Universal sm-* prefix rule for
+        # authored artefacts), every SimpleMotion-authored script and
+        # workflow file must have a basename starting with `sm-`. Third-party
+        # installs keep upstream names but we don't track those. Scope:
+        #   - .sm-scripts/**/*.{sh,bash,zsh,py,ps1}
+        #   - .github/workflows/*.yml
+        # Other .github/ yaml (issue templates, CODEOWNERS, dependabot) follow
+        # GitHub's mandated filenames and are exempt.
         #
-        # NOTE for this repo: the public entry points at the repo ROOT —
-        # sm-install.sh, sm-welcome.ps1, sm-simplicity.sh and friends — are
-        # already sm-prefixed, and are out of scope anyway (the check covers
-        # .sm-scripts/** and .github/workflows/*.yml). Their names are part of
-        # the published install URLs, so they must never be renamed to satisfy
-        # a lint.
+        # Python exception: importable modules (basename is the import
+        # identifier) may use the underscore variant `sm_*.py` since `-` is
+        # invalid in identifiers. Shell/PowerShell/YAML get no such exception.
         run: |
           set -euo pipefail
           fail=0
@@ -282,7 +282,7 @@ jobs:
                 case "$base" in
                   sm-*|sm_*) : ;;
                   *)
-                    echo "::error file=$f::SimpleMotion-authored Python module must have an sm- or sm_ prefix per DISTRIBUTE.md principle 9 (rename to sm-${base} for standalone scripts, or sm_${base%.py}.py for importable modules)"
+                    echo "::error file=$f::SimpleMotion-authored Python module must have an sm- or sm_ prefix per DISTRIBUTE.md principle 9 (rename to sm-${base} for standalone scripts, or sm_${base#*_} / sm_${base%.py}.py for importable modules)"
                     fail=1
                     ;;
                 esac
