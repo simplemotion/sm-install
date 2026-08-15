@@ -232,8 +232,12 @@ jobs:
               report "$t is tagged but no changelog row names it"
               continue
             fi
-            got_h=$(printf '%s' "$row" | awk -F'|' '{gsub(/ /,"",$3); print $3}')
-            got_d=$(printf '%s' "$row" | awk -F'|' '{gsub(/^ +| +$/,"",$4); print $4}')
+            # Strip backticks as well as whitespace — the Version key already
+            # tolerates them, so a fully backticked row matched on its key and
+            # then failed on its Hash with the same SHA git reported. This fork
+            # runs the step HARD, so here it failed PRs rather than warning.
+            got_h=$(printf '%s' "$row" | awk -F'|' '{gsub(/[[:space:]`]/,"",$3); print $3}')
+            got_d=$(printf '%s' "$row" | awk -F'|' '{gsub(/`/,"",$4); gsub(/^ +| +$/,"",$4); print $4}')
             [ "$got_h" = "$short" ] || report "$t: Hash is ${got_h:-empty}, git says $short"
             [ "$got_d" = "$when" ] || report "$t: Date is ${got_d:-empty}, git says $when"
           done < <(printf '%s\n' "$tags")
