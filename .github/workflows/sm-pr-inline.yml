@@ -1,5 +1,9 @@
 # PR gate — INLINED, deliberately NOT the canonical sm-pr caller stub.
 #
+# The filename says so: `-inline` marks a fork of a shared workflow, not the
+# byte-identical caller stub every other repo carries at `sm-pr.yml`. It was
+# named `sm-pr.yml` until 2026-08-15.
+#
 # Do not "restore" this to
 # `uses: simplemotion/sm-pr/.github/workflows/sm-pr.yml@main`.
 #
