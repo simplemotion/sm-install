@@ -125,17 +125,33 @@ jobs:
       - name: CHANGE.md uses the canonical 5-column table
         run: |
           set -euo pipefail
-          # Canonical is `| Version | Hash | Date | Author | Notes |`. EVERY
-          # pre-appendix table is checked, not just the first — files typically
-          # carry two (main changelog + a retired `## Legacy` stream) and those
-          # drifted independently. Stops at the appendix marker, whose own table
-          # is held byte-identical to canonical by sm-reconcile-appendix.sh.
+          # Canonical is `| Version | Hash | Date | Author | Notes |`. The Hash
+          # column arrived with that format; repos that never migrated carried
+          # `| Version | Date | Author | Notes |` — 203 of 414 at the 2026-08-04
+          # audit, all since migrated.
+          #
+          # EVERY pre-appendix table is checked, not just the first: files
+          # typically carry two (the main changelog and a retired `## Legacy`
+          # stream) and those drifted independently. Stops at the appendix marker,
+          # because the versioning-policy appendix has its own `| Version |` table
+          # held byte-identical to canonical by sm-reconcile-appendix.sh — not this
+          # workflow's business to judge.
+          # Checks the HEADER and every DATA ROW beneath it. It used to match
+          # only `| Version |` lines, so it verified that a table DECLARED five
+          # columns and never counted cells on a row — which is how 17 malformed
+          # rows across 8 repos passed it for months. Three shapes got through:
+          # a bare pipe in the Notes prose, a backslash-escaped pipe (renders
+          # correctly, still splits the row for any counter), and a row missing
+          # its closing pipe. Write an interior pipe as &#124;.
           bad=$(awk '
             /^#+[[:space:]]*[Aa]ppendix/ { exit }
-            /^\|[[:space:]]*Version[[:space:]]*\|/ {
+            /^\|/ {
               n = gsub(/\|/, "|") - 1
-              if (n != 5) { print FNR }
+              if ($0 ~ /^\|[[:space:]]*Version[[:space:]]*\|/) { intable = 1 }
+              if (intable && n != 5) { print FNR }
+              next
             }
+            { intable = 0 }
           ' CHANGE.md)
           if [ -n "$bad" ]; then
             while IFS= read -r ln; do
@@ -143,6 +159,91 @@ jobs:
             done <<< "$bad"
             exit 1
           fi
+
+      - name: CHANGE.md tracks the develop tag stream
+        # The changelog is DERIVED from git, not maintained beside it. Every
+        # *-develop-NNN tag gets a row whose Hash and Date come from the commit
+        # that tag points at, so the three cannot drift.
+        #
+        # Advisory by default (require_changelog_stream: false) and hard once a
+        # repo is backfilled. The advisory branch handles its own failure inside
+        # this run: block rather than via continue-on-error, per CLAUDE.md — an
+        # advisory check must not be able to fail the job, and the keyword is
+        # indiscriminate about what else it swallows.
+        #
+        # Rows for versions with no tag are ignored, so the history each repo
+        # accumulated before it started tagging stays untouched. One leading
+        # (auto) row is allowed: the newest change's tag is minted after merge,
+        # so at PR time its key cannot exist yet.
+        run: |
+          set -uo pipefail
+          MODE=advisory
+          if [ "true" = "true" ]; then MODE=hard; fi
+          # The hygiene checkout is shallow and carries no tags. Fetch tag tips
+          # only, at depth 1 — a full-history clone on every PR in every repo is
+          # the kind of cost -030 was raised to cut.
+          git fetch --quiet --tags --depth=1 origin 2>/dev/null || true
+          tags=$(git tag -l '*develop-*' | sed -E 's/.*develop-0*([0-9]+)$/\1 &/' | sort -n | cut -d' ' -f2)
+          if [ -z "$tags" ]; then
+            echo "no develop tags — nothing to check"
+            exit 0
+          fi
+          newest=$(printf '%s\n' "$tags" | tail -1)
+          problems=0
+          report() {
+            if [ "$MODE" = hard ]; then
+              echo "::error file=CHANGE.md::$1"
+            else
+              echo "::warning file=CHANGE.md::$1"
+            fi
+            problems=$((problems + 1))
+          }
+          # Only `(auto)` rows INSIDE the stream are held to the one-placeholder
+          # rule. A row below the oldest tag is frozen history — written before
+          # the repo ever stamped a version, with no tag to derive one from, and
+          # preserved verbatim. 9001-9003-SM-Executive-Dot-Claude carries 12.
+          oldest=$(printf '%s\n' "$tags" | head -1)
+          oldest_ln=$(grep -n -m1 -E "^\| *\`?${oldest}\`? *\|" CHANGE.md | cut -d: -f1 || true)
+          if [ -n "$oldest_ln" ]; then
+            autos=$(awk -v n="$oldest_ln" '$0 ~ /^\| *\(auto\) *\|/ && NR < n { c++ } END { print c+0 }' CHANGE.md)
+          else
+            autos=$(grep -cE '^\| *\(auto\) *\|' CHANGE.md || true)
+          fi
+          if [ "$autos" -gt 1 ]; then
+            report "$autos rows inside the tag stream are still (auto); only the newest may be, until its tag is minted"
+          fi
+          while IFS= read -r t; do
+            [ -n "$t" ] || continue
+            sha=$(git rev-list -n1 "$t" 2>/dev/null) || continue
+            [ -n "$sha" ] || continue
+            short=$(git rev-parse --short=7 "$sha")
+            when=$(TZ=UTC0 git log -1 --date=format-local:'%Y-%m-%d %H:%M UTC' --format=%cd "$sha")
+            row=$(grep -m1 -E "^\| *\`?${t}\`? *\|" CHANGE.md || true)
+            if [ -z "$row" ]; then
+              # The NEWEST tag is allowed to have no row yet. It was minted by
+              # the merge that just happened, after the PR which would have
+              # documented it — so demanding a row here would fail every PR
+              # that follows a merge, forever. The in-flight `(auto)` row is
+              # what becomes this row, and the count is capped above.
+              if [ "$t" = "$newest" ]; then
+                echo "$t has no row yet — minted by the last merge, expected"
+                continue
+              fi
+              report "$t is tagged but no changelog row names it"
+              continue
+            fi
+            got_h=$(printf '%s' "$row" | awk -F'|' '{gsub(/ /,"",$3); print $3}')
+            got_d=$(printf '%s' "$row" | awk -F'|' '{gsub(/^ +| +$/,"",$4); print $4}')
+            [ "$got_h" = "$short" ] || report "$t: Hash is ${got_h:-empty}, git says $short"
+            [ "$got_d" = "$when" ] || report "$t: Date is ${got_d:-empty}, git says $when"
+          done < <(printf '%s\n' "$tags")
+          if [ "$problems" -eq 0 ]; then
+            echo "CHANGE.md tracks the develop stream"
+            exit 0
+          fi
+          echo "$problems problem(s) between CHANGE.md and the develop tag stream"
+          if [ "$MODE" = hard ]; then exit 1; fi
+          echo "advisory — set require_changelog_stream: true once this repo is backfilled"
 
       - name: No bootstrap / rendered artefacts committed
         run: |
