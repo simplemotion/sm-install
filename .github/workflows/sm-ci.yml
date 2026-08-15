@@ -106,6 +106,31 @@ jobs:
           if git rev-parse -q --verify "refs/tags/$V" >/dev/null; then
             echo "$V already tagged — nothing to do"; exit 0
           fi
+          # A merge that touches nothing but CHANGE.md produces a byte-identical
+          # artefact, so stamping it asserts a build that does not exist — and
+          # the tag it mints then owes CHANGE.md a row that cannot have been
+          # written, because the key is only knowable after the merge. That is a
+          # loop: the PR adding the missing row mints a tag of its own.
+          #
+          # Kept in step with simplemotion/sm-ci, which gained this guard on
+          # 2026-08-14. It has to be copied rather than inherited: this repo is
+          # public and sm-ci is internal, so the reusable workflow cannot be
+          # called from here (see the header). A fix there does NOT reach here.
+          #
+          # Fails OPEN — if the range cannot be computed (force push, unknown
+          # `before`), we stamp rather than silently stop tagging.
+          before="${{ github.event.before }}"
+          changed=''
+          if [ -n "$before" ] \
+            && [ "$before" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "${before}^{commit}" 2>/dev/null; then
+            changed=$(git diff --name-only "$before" "${{ github.sha }}" --)
+          fi
+          if [ -n "$changed" ] \
+            && [ -z "$(printf '%s\n' "$changed" | grep -vx 'CHANGE.md' || true)" ]; then
+            echo "only CHANGE.md changed — no new artefact, so no develop tag"
+            exit 0
+          fi
           # Annotated, per enterprise policy: `git describe` prefers annotated
           # tags, so a lightweight tag here would shadow a GA on the same commit.
           git config user.name  "github-actions[bot]"
