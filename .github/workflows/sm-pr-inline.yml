@@ -211,6 +211,27 @@ jobs:
           fi
           if [ "$autos" -gt 1 ]; then
             report "$autos rows inside the tag stream are still (auto); only the newest may be, until its tag is minted"
+            # Don't just say it — hand back the finished row. The author cannot
+            # know the key at PR time (the tag is minted on merge), so keying is
+            # always retrospective, and looking up a hash and a UTC timestamp by
+            # hand is exactly the step that gets skipped. CI already knows both.
+            # It cannot write the row itself: the caller stub grants
+            # contents: read, and widening that fleet-wide to save a paste is
+            # the wrong trade.
+            # Newest first: the row awaiting a key is the most recent tag
+            # without one, which is what the extra (auto) row will become.
+            for t in $(printf '%s\n' "$tags" | tail -r 2>/dev/null || printf '%s\n' "$tags" | tac); do
+              if ! grep -qE "^\| *\`?${t}\`? *\|" CHANGE.md; then
+                sha=$(git rev-list -n1 "$t" 2>/dev/null) || continue
+                [ -n "$sha" ] || continue
+                echo "To fix: key the OLDEST (auto) row in the stream by replacing its"
+                echo "leading '| (auto) | — |' with:"
+                echo
+                echo "  | \`${t}\` | $(git rev-parse --short=7 "$sha") | $(TZ=UTC0 git log -1 --date=format-local:'%Y-%m-%d %H:%M UTC' --format=%cd "$sha") |"
+                echo
+                break
+              fi
+            done
           fi
           while IFS= read -r t; do
             [ -n "$t" ] || continue
