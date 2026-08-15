@@ -1,5 +1,10 @@
 # CI — INLINED, deliberately NOT the canonical sm-ci caller stub.
 #
+# The filename says so: `-inline` marks a fork of a shared workflow, not the
+# byte-identical caller stub every other repo carries at `sm-ci.yml`. It was
+# named `sm-ci.yml` until 2026-08-15, which invited exactly the mistake the
+# next paragraph warns against.
+#
 # Do not "restore" this to `uses: simplemotion/sm-ci/.github/workflows/sm-ci.yml@main`.
 # It WAS that stub, byte-identical to every other repo's, and it failed at
 # STARTUP on every push from 2026-07-22 to 2026-07-31 — five consecutive runs,
