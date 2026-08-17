@@ -62,7 +62,7 @@ jobs:
         run: |
           set -euo pipefail
           missing=0
-          for f in ASSIGN.md CHANGE.md CLAUDE.md README.md .gitignore; do
+          for f in ASSIGN.md CHANGE.md CLAUDE.md README.md SECURE.md .gitignore; do
             if [[ ! -f "$f" ]]; then
               echo "::error file=$f::required top-level file missing"
               missing=1
