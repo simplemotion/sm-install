@@ -260,8 +260,12 @@ jobs:
           exit "$fail"
 
       - name: SimpleMotion-authored scripts + workflows have sm- prefix
-        # Per DISTRIBUTE.md principle 9 (Universal sm-* prefix rule for
-        # authored artefacts), every SimpleMotion-authored script and
+        # Every SimpleMotion-authored script and workflow file must have a
+        # basename starting with `sm-`. This cited DISTRIBUTE.md principle 9
+        # until 2026-08-17; that document exists in no repo and no checkout,
+        # so the citation pointed developers at nothing. The rule is now
+        # documented in simplemotion/sm-pr's README. Every SimpleMotion-
+        # authored script and
         # workflow file must have a basename starting with `sm-`. Third-party
         # installs keep upstream names but we don't track those. Scope:
         #   - .sm-scripts/**/*.{sh,bash,zsh,py,ps1}
@@ -282,7 +286,7 @@ jobs:
                 case "$base" in
                   sm-*|sm_*) : ;;
                   *)
-                    echo "::error file=$f::SimpleMotion-authored Python module must have an sm- or sm_ prefix per DISTRIBUTE.md principle 9 (rename to sm-${base} for standalone scripts, or sm_${base#*_} / sm_${base%.py}.py for importable modules)"
+                    echo "::error file=$f::SimpleMotion-authored Python module must have an sm- or sm_ prefix (rename to sm-${base} for standalone scripts, or sm_${base#*_} / sm_${base%.py}.py for importable modules). Rule: simplemotion/sm-pr README, sm-* prefix on authored artefacts."
                     fail=1
                     ;;
                 esac
@@ -291,7 +295,7 @@ jobs:
                 case "$base" in
                   sm-*) : ;;
                   *)
-                    echo "::error file=$f::SimpleMotion-authored artefact must have an sm- prefix per DISTRIBUTE.md principle 9 (rename to sm-${base})"
+                    echo "::error file=$f::SimpleMotion-authored artefact must have an sm- prefix (rename to sm-${base}). Rule: simplemotion/sm-pr README, sm-* prefix on authored artefacts."
                     fail=1
                     ;;
                 esac
