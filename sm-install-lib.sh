@@ -74,11 +74,18 @@ sm_mktemp() {
 confirm_section() {
     local title="$1"
     local pad
-    pad=$(( 56 - ${#title} ))
+    # Width 36, dim rule, bold title — the same formula the sm-welcome
+    # binary's phase_header uses, so a phase opened by the shell and one
+    # opened by the binary are indistinguishable in the transcript. This
+    # rule was 56 wide and uncoloured, which made the bootstrap's own
+    # phases look like a different program from the ones that follow.
+    pad=$(( 36 - ${#title} ))
     if (( pad < 0 )); then pad=0; fi
-    printf '\n  ── %s ' "$title"
+    local b='' d='' o=''
+    if [[ -t 1 ]]; then b=$'\033[1m'; d=$'\033[2m'; o=$'\033[0m'; fi
+    printf '\n  %s──%s %s%s%s %s' "$d" "$o" "$b" "$title" "$o" "$d"
     printf -- '─%.0s' $(seq 1 "$pad")
-    printf '\n'
+    printf '%s\n' "$o"
     # Auto-proceed by default — the section gates made a fresh onboarding
     # three extra Enter presses for no decision the user could make
     # (matches sm-welcome v0.1.10 dropping its per-step Proceed gate).
