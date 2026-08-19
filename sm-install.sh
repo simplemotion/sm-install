@@ -20,7 +20,7 @@
 #                                Channel to resolve into a tag. Each
 #                                channel maps to its own GitHub repo:
 #                                  release → simplemotion/sm-release  (public)
-#                                  preview → simplemotion/sm-preview  (cohort — needs authed gh)
+#                                  preview → simplemotion/sm-preview  (staff+freelance — needs authed gh)
 #                                  develop → simplemotion/sm-develop  (staff — needs authed gh)
 #                                  testing → simplemotion/sm-testing  (staff — needs authed gh)
 #                                  private → simplemotion/sm-private  (staff — needs authed gh)
@@ -287,8 +287,8 @@ if [[ -z "$VERSION" ]]; then
                         printf '      https://github.com/%s is not public, so an unauthenticated\n' "$REPO"
                         printf '      request cannot tell "no such release" from "not visible to you".\n\n'
                         printf '      Run `gh auth login`, or set GH_TOKEN, and try again.\n'
-                        printf '      Access requires membership of a SimpleMotion cohort. If you have\n'
-                        printf '      not been accepted into the organisation, use --channel release.\n\n'
+                        printf '      Access is granted to named SimpleMotion teams only. If you are\n'
+                        printf '      not on one of them, use --channel release.\n\n'
                         exit 1
                     fi
                     ;;
