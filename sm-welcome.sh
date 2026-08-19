@@ -103,7 +103,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --channel)
             if [[ $# -lt 2 ]]; then
-                echo "sm-welcome.sh: --channel requires a value (release|preview)" >&2
+                echo "sm-welcome.sh: --channel requires a value (release|preview|develop|testing)" >&2
                 exit 1
             fi
             CHANNEL_ARG=(--channel "$2"); CHANNEL_VAL="$2"; shift 2
@@ -223,7 +223,12 @@ LOCAL_VER=""
 LATEST_VER=""
 case "$CHANNEL_VAL" in
     release|preview|develop|testing) CHANNEL_REPO="simplemotion/sm-${CHANNEL_VAL}"; STORE_CHANNEL="$CHANNEL_VAL" ;;
-    private) CHANNEL_REPO="simplemotion/sm-develop"; STORE_CHANNEL="develop" ;;   # legacy alias for develop
+    # 'private' is deliberately absent. It was a legacy alias for develop until
+    # 2026-08-19 and is now the GA terminal for products that never leave
+    # SimpleMotion — which sm-welcome, being public-eligible, can never be on.
+    # Leaving the old alias would have sent --channel private to develop and
+    # silently installed a different build than the one named. Falling through
+    # to the no-fast-path branch lets sm-install.sh report it accurately.
     *) CHANNEL_REPO=""; STORE_CHANNEL="" ;;
 esac
 STORE_BIN="$HOME/.simplemotion/share/sm-welcome/sm-${STORE_CHANNEL}/sm-welcome"
