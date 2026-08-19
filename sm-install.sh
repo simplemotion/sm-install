@@ -16,14 +16,19 @@
 #                                .exe on this script; .ps1 adds it).
 #
 # Optional flags:
-#   --channel release|preview|develop|testing
+#   --channel release|preview|develop|testing|staff
 #                                Channel to resolve into a tag. Each
 #                                channel maps to its own GitHub repo:
 #                                  release → simplemotion/sm-release  (public)
 #                                  preview → simplemotion/sm-preview  (public)
-#                                  develop → simplemotion/sm-develop  (internal — needs authed gh)
-#                                  testing → simplemotion/sm-testing  (private — needs authed gh)
+#                                  develop → simplemotion/sm-develop  (staff — needs authed gh)
+#                                  testing → simplemotion/sm-testing  (staff — needs authed gh)
+#                                  staff   → simplemotion/sm-staff    (staff — needs authed gh)
 #                                Default: $SM_CHANNEL or 'release'.
+#                                'staff' is the GA channel for products that
+#                                are never published publicly. It is a
+#                                TERMINAL, like release: it carries finalised
+#                                vX.Y.Z only, never a -NNN candidate.
 #   --repo OWNER/NAME            Override the channel→repo default.
 #                                Useful for development or hosting on a
 #                                non-SimpleMotion repo.
@@ -86,9 +91,9 @@ curl() { command curl --tlsv1.2 "$@"; }
 # cross-host redirect, so it's safe even though release-asset downloads
 # redirect off api.github.com. Use ONLY for api.github.com calls.
 SM_GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-# The develop/testing channels live in non-public repos ("requires authed
-# gh" per README). When no token env is set, borrow gh's stored token so
-# the documented `gh auth login` path just works.
+# The develop/testing/staff channels live in non-public repos ("requires
+# authed gh" per README). When no token env is set, borrow gh's stored token
+# so the documented `gh auth login` path just works.
 if [ -z "$SM_GH_TOKEN" ] && command -v gh >/dev/null 2>&1; then
     SM_GH_TOKEN=$(gh auth token 2>/dev/null || true)
 fi
@@ -161,17 +166,17 @@ case "$MODE" in
     *) echo "sm-install.sh: --mode must be 'install', 'run', or 'install-and-run' (got: $MODE)" >&2; exit 1 ;;
 esac
 
-# Channel → repo defaulting. Four channels each get their own repo, so
+# Channel → repo defaulting. Every channel gets its own repo, so
 # `releases/latest` on each is unambiguous and there's no prerelease
 # flag dance. `--repo` overrides for development / external use.
 case "$CHANNEL" in
-    release|preview|develop|testing) ;;
+    release|preview|develop|testing|staff) ;;
     private)
         # Legacy alias: the sm-private channel repo was renamed sm-develop.
         # Old install receipts record channel = "private"; keep them working.
         echo "sm-install.sh: channel 'private' is now 'develop'; continuing as develop" >&2
         CHANNEL="develop" ;;
-    *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing)" >&2; exit 1 ;;
+    *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing|staff)" >&2; exit 1 ;;
 esac
 if [[ -z "$REPO" ]]; then
     REPO="simplemotion/sm-${CHANNEL}"
@@ -251,6 +256,24 @@ if [[ -z "$VERSION" ]]; then
     fi
     if [[ -z "${TAG:-}" ]]; then
         {
+            # A non-public channel returns 404 to an unauthenticated caller,
+            # and 404 is indistinguishable from "nothing published yet" — the
+            # API does not say "you cannot see this". Reporting the wrong one
+            # sends a staff member hunting for a release that is sitting right
+            # there, so say which case we cannot rule out.
+            case "$CHANNEL" in
+                develop|testing|staff)
+                    if [ -z "$SM_GH_TOKEN" ]; then
+                        printf '\n  [x] Cannot read the %s channel: no GitHub credentials found.\n' "$CHANNEL"
+                        printf '      https://github.com/%s is not public, so an unauthenticated\n' "$REPO"
+                        printf '      request cannot tell "no such release" from "not visible to you".\n\n'
+                        printf '      Run `gh auth login`, or set GH_TOKEN, and try again.\n'
+                        printf '      If you are not SimpleMotion staff, this channel is not for you:\n'
+                        printf '      use --channel release.\n\n'
+                        exit 1
+                    fi
+                    ;;
+            esac
             printf '\n  [x] No %s build of %s is published yet.\n' "$CHANNEL" "$PACKAGE"
             printf '      (https://github.com/%s has no release to install.)\n\n' "$REPO"
             printf '      Try another channel, e.g.:\n'
@@ -267,7 +290,7 @@ URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 
 # Download one named asset of the resolved release to a path. Public
 # channel repos (sm-release, sm-preview) serve the plain browser
-# download URL. The internal/private channels (sm-develop, sm-testing)
+# download URL. The staff channels (sm-develop, sm-testing, sm-staff)
 # 404 on it for everyone, so with a token present resolve the asset's
 # API url from the release JSON and fetch it as an octet-stream; fall
 # back to the browser URL when unauthenticated or the asset is missing.
