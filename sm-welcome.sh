@@ -212,7 +212,7 @@ fi
 
 # ── Section 2: sm-welcome ─────────────────────────────────────────────
 # Fast-path resolution — channel-aware. The per-channel store
-# (~/.simplemotion/share/sm-welcome/sm-<channel>/sm-welcome) holds the binary
+# (~/.simplemotion/share/<channel>/sm-welcome) holds the binary
 # we last installed for THIS channel. If its version already matches the
 # channel's latest release, skip the download — and re-point the
 # ~/.simplemotion/bin symlink at it, so a channel *switch* still takes effect
@@ -231,7 +231,7 @@ case "$CHANNEL_VAL" in
     # to the no-fast-path branch lets sm-install.sh report it accurately.
     *) CHANNEL_REPO=""; STORE_CHANNEL="" ;;
 esac
-STORE_BIN="$HOME/.simplemotion/share/sm-welcome/sm-${STORE_CHANNEL}/sm-welcome"
+STORE_BIN="$HOME/.simplemotion/share/${STORE_CHANNEL}/sm-welcome"
 if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -n "$STORE_CHANNEL" && -x "$STORE_BIN" ]]; then
     LOCAL_VER=$("$STORE_BIN" -V 2>/dev/null | awk '{print $2}' | sed 's/^v//')
     LATEST_TAG=$(gh_api "https://api.github.com/repos/${CHANNEL_REPO}/releases/latest" 2>/dev/null \
