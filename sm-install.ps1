@@ -135,7 +135,7 @@ function Format-Step([int]$i) { return ('[{0:D2}/{1}]' -f $i, $StepsTotal) }
 #     list and pick the newest tag matching the prefix.
 if (-not $Version) {
     if ($TagPrefix) {
-        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -UseBasicParsing -Headers (Get-GitHubApiHeaders) -MaximumRetryCount 3 -RetryIntervalSec 2
+        $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases?per_page=100" -UseBasicParsing -Headers (Get-GitHubApiHeaders) -MaximumRetryCount 3 -RetryIntervalSec 2
         $picked = $releases | Where-Object { $_.tag_name.StartsWith($TagPrefix) } | Select-Object -First 1
         if (-not $picked) {
             Write-Host ""

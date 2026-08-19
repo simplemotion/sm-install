@@ -232,14 +232,21 @@ ASSET="${PACKAGE}-${SUFFIX}"
 #   rather than needing to be deployed in lockstep with it.
 if [[ -z "$VERSION" ]]; then
     # Probe the package-prefixed namespace before the bare pointer.
+    #
+    # per_page=100 because the channel repos are SHARED: sm-develop already
+    # holds 49 releases across 17 packages. The API default of 30 is a
+    # deadline, not a limit — once a package's newest release falls past it,
+    # this scan finds nothing and the error says 'No <channel> build of <pkg>
+    # is published yet', which reads like it was never released rather than
+    # like a page-size bug. sm-mcp sat at index 17 of 30 on 2026-08-19.
     if [[ -z "$TAG_PREFIX" && -n "$PACKAGE" ]]; then
-        PROBE=$(gh_api "https://api.github.com/repos/${REPO}/releases" 2>/dev/null || true)
+        PROBE=$(gh_api "https://api.github.com/repos/${REPO}/releases?per_page=100" 2>/dev/null || true)
         PROBE_TAG=$(awk -v prefix="${PACKAGE}-v" '
                         /"tag_name":/ { if ($0 ~ ("\"" prefix)) { print $0; exit } }' <<<"$PROBE"                     | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
         [[ -n "$PROBE_TAG" ]] && TAG_PREFIX="${PACKAGE}-"
     fi
     if [[ -n "$TAG_PREFIX" ]]; then
-        RELEASES_JSON=$(gh_api "https://api.github.com/repos/${REPO}/releases" 2>/dev/null || true)
+        RELEASES_JSON=$(gh_api "https://api.github.com/repos/${REPO}/releases?per_page=100" 2>/dev/null || true)
         TAG=$(awk -v prefix="$TAG_PREFIX" '
                   /"tag_name":/ {
                       if ($0 ~ ("\"" prefix)) { print $0; exit }
