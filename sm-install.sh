@@ -20,7 +20,7 @@
 #                                Channel to resolve into a tag. Each
 #                                channel maps to its own GitHub repo:
 #                                  release → simplemotion/sm-release  (public)
-#                                  preview → simplemotion/sm-preview  (staff+freelance — needs authed gh)
+#                                  preview → simplemotion/sm-preview  (staff — needs authed gh)
 #                                  develop → simplemotion/sm-develop  (staff — needs authed gh)
 #                                  testing → simplemotion/sm-testing  (staff — needs authed gh)
 #                                  private → simplemotion/sm-private  (staff — needs authed gh)
