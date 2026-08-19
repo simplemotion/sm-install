@@ -7,7 +7,7 @@ This is the public bootstrap entry point served at **`install.simplemotion.com`*
 | Channel | Repo | Visibility | Audience |
 |---|---|---|---|
 | `release` | [simplemotion/sm-release](https://github.com/simplemotion/sm-release) | public | All consumers — stable production builds |
-| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | private | Early access — staff and freelance, **not** customers |
+| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | private | Early access — staff only |
 | `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | staff | Earliest development builds |
 | `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | staff | In-flight test builds |
 | `private` | [simplemotion/sm-private](https://github.com/simplemotion/sm-private) | staff | **GA** builds of products that are never published publicly |
@@ -19,11 +19,15 @@ named teams:
 
 | Channel | Teams with read access |
 |---|---|
-| `preview` | `ent:sm-executive`, `ent:sm-employees`, `ent:sm-freelance` |
-| `develop`, `testing`, `private` | `ent:sm-executive`, `ent:sm-employees` |
+| `preview`, `develop`, `testing`, `private` | `ent:sm-executive`, `ent:sm-employees` |
 
-`ent:sm-customers` is deliberately on none of them. Customers get
-`release` — the finalised, public GA — and nothing in flight.
+Every channel but `release` has the same two teams. Neither `ent:sm-freelance`
+nor `ent:sm-customers` is on any of them: both get `release` — the finalised,
+public GA — and nothing in flight.
+
+`preview` is staff-only despite carrying *candidates* rather than internal GAs,
+because a staff-only package passes through it on the way to `private`. Reading
+preview means reading every internal product's candidate builds.
 
 `release` stays public on purpose: it is what a fresh machine bootstraps
 `sm-welcome` from, before it has `gh` or a token at all.
@@ -96,7 +100,7 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 | Selector | Resolves to |
 |---|---|
 | `--channel release` (default) or `SM_CHANNEL=release` | newest release on `simplemotion/sm-release` |
-| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` (not public — requires authed `gh`, and membership of executive, employees or freelance) |
+| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` (not public — requires authed `gh` and staff membership) |
 | `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (not public — requires authed `gh` with read access) |
 | `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (not public — requires authed `gh`) |
 | `--channel private` or `SM_CHANNEL=private` | newest GA release on `simplemotion/sm-private` (not public — requires authed `gh`) |
