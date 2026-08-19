@@ -37,7 +37,11 @@
 #                                channel's copy (a plain copy where Windows
 #                                symlink privilege is unavailable).
 #   -Version TAG                 Pin a specific tag.
-#   -Channel release|preview     Default: $env:SM_CHANNEL or 'release'.
+#   -Channel release|preview|develop|testing|staff
+#                                Default: $env:SM_CHANNEL or 'release'.
+#                                develop/testing/staff are not public and need
+#                                an authenticated gh. 'staff' is the GA channel
+#                                for products never published publicly.
 #   -AssetSuffix short|triple    Asset-name suffix style:
 #                                  short  = `<package>-win-<arch>.exe`
 #                                           (default) with arm64/x64 short
@@ -57,7 +61,7 @@ param(
     [ValidateSet('install','run','install-and-run')] [string]$Mode = 'install',
     [string]$InstallDir = '',
     [string]$Version = '',
-    [ValidateSet('release','preview','develop','testing','private')] [string]$Channel = '',
+    [ValidateSet('release','preview','develop','testing','staff','private')] [string]$Channel = '',
     [ValidateSet('short','triple')] [string]$AssetSuffix = 'short',
     [string[]]$BinArgs = @()
 )

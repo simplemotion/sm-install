@@ -2,26 +2,51 @@
 
 Installer scripts for [SimpleMotion](https://simplemotion.com) binary products. One command installs the SimpleMotion CLIs.
 
-This is the public bootstrap entry point served at **`install.simplemotion.com`**. Binaries themselves live in four channel-specific repos:
+This is the public bootstrap entry point served at **`install.simplemotion.com`**. Binaries themselves live in channel-specific repos:
 
 | Channel | Repo | Visibility | Audience |
 |---|---|---|---|
 | `release` | [simplemotion/sm-release](https://github.com/simplemotion/sm-release) | public | All consumers — stable production builds |
-| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | public | Early-access consumers — features in flight |
-| `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | internal | SimpleMotion internal — earliest development builds |
-| `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | private | SimpleMotion internal — in-flight test builds |
+| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | cohort | Early-access consumers — features in flight |
+| `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | staff | Earliest development builds |
+| `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | staff | In-flight test builds |
+| `staff` | [simplemotion/sm-staff](https://github.com/simplemotion/sm-staff) | staff | **GA** builds of products that are never published publicly |
 
 Each channel repo has its own `releases/latest` namespace, so channel selection is unambiguous and there's no prerelease-flag coordination required.
 
+**Only `release` is open.** *Cohort* means membership of `sm-executive`,
+`sm-employees`, `sm-freelance` or `sm-customers` — so early-access builds go to
+people SimpleMotion has accepted, not to anyone with the URL. *Staff* is
+narrower still: `sm-executive` and `sm-employees` only.
+
+`release` stays public on purpose: it is what a fresh machine bootstraps
+`sm-welcome` from, before it has `gh` or a token at all.
+
+Every gated channel needs an authenticated `gh` (or `GH_TOKEN`) with read
+access. An unauthenticated request to one gets a 404, which is
+indistinguishable from "nothing published yet" — the installer says so rather
+than guessing.
+
 ### Promotion pipeline
 
-A build promotes through the channels in order — `develop` → `testing` → `preview` → `release` — carrying a channel-prefixed tag at each phase until it earns the final clean release tag:
+The build happens **once**, at `develop`. Every later stage promotes that same
+artifact, so its build counter `NNN` is carried unchanged and GA is byte
+identical to what was tested. After `testing` the ladder forks, and a package
+has exactly one terminal:
 
 ```
-sm-develop-v0.0.1.#  →  sm-testing-v0.0.1.#  →  sm-preview-v0.0.1.#  →  sm-release-v0.0.1.#  →  v0.0.1
+                            ┌→ preview → release(-NNN) → GA vX.Y.Z   PUBLIC
+develop → testing ──────────┤
+                            └→ staff (GA vX.Y.Z)                     STAFF ONLY
+
+v0.1.0-develop-249 → v0.1.0-testing-249 → v0.1.0-preview-249 → v0.1.0-release-249 → v0.1.0
 ```
 
-`#` is the build counter within a phase. Each phase's builds are published to its channel repo; the final clean `v0.0.1` tag lands on `sm-release` as the production release.
+Which fork a package takes is decided by `channels/public-packages.txt` in
+`3400-9993-SM-Publish` — **default deny**, so a package is staff-only until it
+is explicitly listed as public-eligible. `sm-staff` carries finalised
+`vX.Y.Z` only; there is no `-staff-NNN` stage, because `testing` is the
+candidate rung for both ladders.
 
 ## Install — sm-welcome (onboarding CLI)
 
@@ -65,9 +90,10 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 | Selector | Resolves to |
 |---|---|
 | `--channel release` (default) or `SM_CHANNEL=release` | newest release on `simplemotion/sm-release` |
-| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` |
-| `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (internal repo — requires authed `gh` with read access) |
-| `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (private repo — internal use) |
+| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` (not public — requires authed `gh` and cohort membership) |
+| `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (not public — requires authed `gh` with read access) |
+| `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (not public — requires authed `gh`) |
+| `--channel staff` or `SM_CHANNEL=staff` | newest GA release on `simplemotion/sm-staff` (not public — requires authed `gh`) |
 
 `--channel private` / `SM_CHANNEL=private` is accepted as a legacy alias for `develop` (the `sm-private` channel repo was renamed `sm-develop`).
 
