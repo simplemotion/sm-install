@@ -113,6 +113,48 @@ Each installer downloads the matching platform binary plus its `.sha256` and `.s
 
 If `gh` is missing, the installer bootstraps it from `cli/cli` releases into `~/.local/bin/gh` so attestation verification works on fresh machines.
 
+## Where binaries are stored
+
+The verified binary is kept in a per-channel store, **channel first**:
+
+```
+~/.simplemotion/share/<channel>/<package>
+~/.simplemotion/bin/<package>          → symlink to the active channel's copy
+```
+
+```
+~/.simplemotion/share/
+├── release/     sm-welcome            ← public
+├── preview/     sm-welcome  sm-mcp    ← candidates, both ladders
+├── develop/     …
+├── testing/     …
+└── private/     sm-mcp  sm-govern     ← never published publicly
+```
+
+The store is the source of truth; `~/.simplemotion/bin` holds only symlinks, so
+re-installing from a different channel just re-points the link. `--install-dir`
+and `SM_INSTALL_DIR` choose where the symlinks live — the store path is fixed.
+
+**Grouping by channel makes the private binaries separable.** Everything from
+the private channel lives under one tree, so removing all of it is one command:
+
+```bash
+rm -rf ~/.simplemotion/share/private
+```
+
+Re-run the installer for anything you still want, and it will come back from a
+channel you can reach.
+
+Someone without access to the private channel **never creates that directory**,
+because they can never download from it. There is no empty `private/` to
+explain and nothing to tidy up on a non-staff machine.
+
+> Until 2026-08-19 the store was `<package>/sm-<channel>/<package>`, which
+> scattered each channel's binaries across one directory per package. The
+> installer retires a package's legacy directory for the channel it installs,
+> once the new copy and symlink are in place — so the tree converges as things
+> are re-installed rather than needing a migration step.
+
 ## Verification (consumer-side)
 
 ```bash

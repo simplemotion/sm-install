@@ -32,7 +32,7 @@
 #                                -InstallDir > $env:SM_INSTALL_DIR >
 #                                ~/.simplemotion/bin. The verified binary is
 #                                stored per channel at ~/.simplemotion/share/
-#                                <package>/sm-<channel>/<package>.exe; the
+#                                <channel>/<package>.exe; the
 #                                install dir holds a symlink to the active
 #                                channel's copy (a plain copy where Windows
 #                                symlink privilege is unavailable).
@@ -325,12 +325,12 @@ function Install-Binary {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
     # Per-channel local store (latest-only): the verified binary is kept at
-    # ~/.simplemotion/share/<package>/sm-<channel>/<package>.exe, one current
+    # ~/.simplemotion/share/<channel>/<package>.exe, one current
     # binary per channel. The install dir holds a SYMLINK to the active
     # channel's copy where the OS allows it (Developer Mode / elevated); on
     # stock Windows without that privilege we fall back to a plain copy. The
     # store is the source of truth either way.
-    $storeDir = Join-Path $HOME ".simplemotion\share\$Package\sm-$Channel"
+    $storeDir = Join-Path $HOME ".simplemotion\share\$Channel"
     if (-not (Test-Path $storeDir)) {
         New-Item -ItemType Directory -Path $storeDir -Force | Out-Null
     }

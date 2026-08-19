@@ -265,7 +265,7 @@ $env:PATH = "$LocalBinDir;$LocalPwshDir;$(Join-Path $LocalGitDir 'cmd');$env:PAT
 
 # -- Section 2: sm-welcome ---------------------------------------------
 # Fast-path resolution - channel-aware. The per-channel store
-# (~/.simplemotion/share/sm-welcome/sm-<channel>/sm-welcome.exe) holds the
+# (~/.simplemotion/share/<channel>/sm-welcome.exe) holds the
 # binary we last installed for THIS channel. If its version already matches
 # the channel's latest release, skip the download - and re-point the
 # ~/.simplemotion/bin link at it, so a channel *switch* still takes effect
@@ -283,7 +283,7 @@ switch ($channel) {
     'testing' { $channelRepo = 'simplemotion/sm-testing'; $storeChannel = 'testing' }
     'private' { $channelRepo = 'simplemotion/sm-develop'; $storeChannel = 'develop' }   # legacy alias for develop
 }
-$storeBin = if ($storeChannel) { Join-Path $HOME (".simplemotion\share\sm-welcome\sm-{0}\sm-welcome.exe" -f $storeChannel) } else { $null }
+$storeBin = if ($storeChannel) { Join-Path $HOME (".simplemotion\share\{0}\sm-welcome.exe" -f $storeChannel) } else { $null }
 if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and $storeBin -and (Test-Path $storeBin)) {
     try {
         $verOut = (& $storeBin -V 2>$null) -join ''

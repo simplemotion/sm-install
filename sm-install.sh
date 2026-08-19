@@ -72,8 +72,8 @@
 #                                SimpleMotion CLIs share a dedicated dir;
 #                                third-party packages use the XDG default.
 #                                The verified binary itself is stored per
-#                                channel at ~/.simplemotion/share/<package>/
-#                                sm-<channel>/<package>; the install dir holds
+#                                channel at ~/.simplemotion/share/<channel>/
+#                                <package>; the install dir holds
 #                                a symlink to the active channel's copy.
 #   --version TAG                Pin a specific tag, skipping channel
 #                                resolution.
@@ -496,15 +496,40 @@ EOF
 
 install_to_dir() {
     # Per-channel local store (latest-only): the verified binary is kept at
-    # ~/.simplemotion/share/<package>/sm-<channel>/<package>, one current
-    # binary per channel. The install dir holds a SYMLINK to the active
-    # channel's copy, so re-installing from a different channel just re-points
-    # the link (the store is the source of truth). --install-dir / SM_INSTALL_DIR
-    # still choose where the symlink lives; the store path is fixed.
-    local store_dir="$HOME/.simplemotion/share/${PACKAGE}/sm-${CHANNEL}"
+    # ~/.simplemotion/share/<channel>/<package>, one current binary per
+    # channel. The install dir holds a SYMLINK to the active channel's copy,
+    # so re-installing from a different channel just re-points the link (the
+    # store is the source of truth). --install-dir / SM_INSTALL_DIR still
+    # choose where the symlink lives; the store path is fixed.
+    #
+    # CHANNEL FIRST, package second. It used to be <package>/sm-<channel>,
+    # which scattered a channel's binaries across one directory per package.
+    # Grouping by channel means everything from the private channel lives
+    # under a single tree that can be removed in one command:
+    #
+    #     rm -rf ~/.simplemotion/share/private
+    #
+    # and someone without access to that channel never creates the directory
+    # at all, because they can never download from it. The private binaries
+    # are therefore both obvious and separable rather than interleaved with
+    # public ones.
+    local store_dir="$HOME/.simplemotion/share/${CHANNEL}"
     mkdir -p "$store_dir" "$INSTALL_DIR"
     install -m 0755 "$TMPBIN" "${store_dir}/${PACKAGE}"
     ln -sfn "${store_dir}/${PACKAGE}" "${INSTALL_DIR}/${PACKAGE}"
+
+    # Retire this package's legacy per-package store for THIS channel, after
+    # the new copy and the symlink are in place. Left alone it would strand a
+    # stale binary outside the channel tree — which for the private channel
+    # would mean `rm -rf share/private` no longer removing everything private,
+    # defeating the reason for the layout. Other channels' legacy dirs are
+    # untouched; each retires itself on its next install.
+    legacy_dir="$HOME/.simplemotion/share/${PACKAGE}/sm-${CHANNEL}"
+    if [ -d "$legacy_dir" ]; then
+        rm -rf "$legacy_dir"
+        rmdir "$HOME/.simplemotion/share/${PACKAGE}" 2>/dev/null || true
+        printf '  [%s✓%s] %s Retired legacy store %s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$legacy_dir"
+    fi
     write_receipt "$PACKAGE" "$CHANNEL" "$TAG" "$SOURCE_REPO" "$actual"
     printf '  [%s✓%s] %s Installed %s %s to %s, linked %s/%s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$PACKAGE" "$TAG" "$store_dir" "$INSTALL_DIR" "$PACKAGE"
     case ":$PATH:" in
