@@ -7,17 +7,25 @@ This is the public bootstrap entry point served at **`install.simplemotion.com`*
 | Channel | Repo | Visibility | Audience |
 |---|---|---|---|
 | `release` | [simplemotion/sm-release](https://github.com/simplemotion/sm-release) | public | All consumers — stable production builds |
-| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | public | Early-access consumers — features in flight |
+| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | cohort | Early-access consumers — features in flight |
 | `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | staff | Earliest development builds |
 | `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | staff | In-flight test builds |
 | `staff` | [simplemotion/sm-staff](https://github.com/simplemotion/sm-staff) | staff | **GA** builds of products that are never published publicly |
 
 Each channel repo has its own `releases/latest` namespace, so channel selection is unambiguous and there's no prerelease-flag coordination required.
 
-The staff channels are not public, so they need an authenticated `gh` (or
-`GH_TOKEN`) with read access. An unauthenticated request to one gets a 404,
-which is indistinguishable from "nothing published yet" — the installer says
-so rather than guessing.
+**Only `release` is open.** *Cohort* means membership of `sm-executive`,
+`sm-employees`, `sm-freelance` or `sm-customers` — so early-access builds go to
+people SimpleMotion has accepted, not to anyone with the URL. *Staff* is
+narrower still: `sm-executive` and `sm-employees` only.
+
+`release` stays public on purpose: it is what a fresh machine bootstraps
+`sm-welcome` from, before it has `gh` or a token at all.
+
+Every gated channel needs an authenticated `gh` (or `GH_TOKEN`) with read
+access. An unauthenticated request to one gets a 404, which is
+indistinguishable from "nothing published yet" — the installer says so rather
+than guessing.
 
 ### Promotion pipeline
 
@@ -82,7 +90,7 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 | Selector | Resolves to |
 |---|---|
 | `--channel release` (default) or `SM_CHANNEL=release` | newest release on `simplemotion/sm-release` |
-| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` |
+| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` (not public — requires authed `gh` and cohort membership) |
 | `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (not public — requires authed `gh` with read access) |
 | `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (not public — requires authed `gh`) |
 | `--channel staff` or `SM_CHANNEL=staff` | newest GA release on `simplemotion/sm-staff` (not public — requires authed `gh`) |

@@ -20,7 +20,7 @@
 #                                Channel to resolve into a tag. Each
 #                                channel maps to its own GitHub repo:
 #                                  release → simplemotion/sm-release  (public)
-#                                  preview → simplemotion/sm-preview  (public)
+#                                  preview → simplemotion/sm-preview  (cohort — needs authed gh)
 #                                  develop → simplemotion/sm-develop  (staff — needs authed gh)
 #                                  testing → simplemotion/sm-testing  (staff — needs authed gh)
 #                                  staff   → simplemotion/sm-staff    (staff — needs authed gh)
@@ -91,9 +91,10 @@ curl() { command curl --tlsv1.2 "$@"; }
 # cross-host redirect, so it's safe even though release-asset downloads
 # redirect off api.github.com. Use ONLY for api.github.com calls.
 SM_GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-# The develop/testing/staff channels live in non-public repos ("requires
-# authed gh" per README). When no token env is set, borrow gh's stored token
-# so the documented `gh auth login` path just works.
+# Every channel except release lives in a non-public repo ("requires authed
+# gh" per README). When no token env is set, borrow gh's stored token so the
+# documented `gh auth login` path just works. release stays public so a fresh
+# machine can bootstrap sm-welcome before it has gh or a token at all.
 if [ -z "$SM_GH_TOKEN" ] && command -v gh >/dev/null 2>&1; then
     SM_GH_TOKEN=$(gh auth token 2>/dev/null || true)
 fi
@@ -262,14 +263,14 @@ if [[ -z "$VERSION" ]]; then
             # sends a staff member hunting for a release that is sitting right
             # there, so say which case we cannot rule out.
             case "$CHANNEL" in
-                develop|testing|staff)
+                preview|develop|testing|staff)
                     if [ -z "$SM_GH_TOKEN" ]; then
                         printf '\n  [x] Cannot read the %s channel: no GitHub credentials found.\n' "$CHANNEL"
                         printf '      https://github.com/%s is not public, so an unauthenticated\n' "$REPO"
                         printf '      request cannot tell "no such release" from "not visible to you".\n\n'
                         printf '      Run `gh auth login`, or set GH_TOKEN, and try again.\n'
-                        printf '      If you are not SimpleMotion staff, this channel is not for you:\n'
-                        printf '      use --channel release.\n\n'
+                        printf '      Access requires membership of a SimpleMotion cohort. If you have\n'
+                        printf '      not been accepted into the organisation, use --channel release.\n\n'
                         exit 1
                     fi
                     ;;
@@ -277,7 +278,7 @@ if [[ -z "$VERSION" ]]; then
             printf '\n  [x] No %s build of %s is published yet.\n' "$CHANNEL" "$PACKAGE"
             printf '      (https://github.com/%s has no release to install.)\n\n' "$REPO"
             printf '      Try another channel, e.g.:\n'
-            printf '        curl -fsSL https://install.simplemotion.com/sm-welcome.sh | bash -s -- --channel preview\n\n'
+            printf '        curl -fsSL https://install.simplemotion.com/sm-welcome.sh | bash -s -- --channel release\n\n'
             printf '      Or contact executive@simplemotion.com if you expected a %s build.\n\n' "$CHANNEL"
         } >&2
         exit 1
@@ -289,9 +290,9 @@ fi
 URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 
 # Download one named asset of the resolved release to a path. Public
-# channel repos (sm-release, sm-preview) serve the plain browser
-# download URL. The staff channels (sm-develop, sm-testing, sm-staff)
-# 404 on it for everyone, so with a token present resolve the asset's
+# channel repo (sm-release) serves the plain browser download URL. Every
+# other channel (sm-preview, sm-develop, sm-testing, sm-staff)
+# 404s on it for everyone, so with a token present resolve the asset's
 # API url from the release JSON and fetch it as an octet-stream; fall
 # back to the browser URL when unauthenticated or the asset is missing.
 RELEASE_ASSETS_JSON=""
