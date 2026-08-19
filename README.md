@@ -122,18 +122,30 @@ If `gh` is missing, the installer bootstraps it from `cli/cli` releases into `~/
 The verified binary is kept in a per-channel store, **channel first**:
 
 ```
-~/.simplemotion/share/<channel>/<package>
-~/.simplemotion/bin/<package>          → symlink to the active channel's copy
+~/.simplemotion/share/<channel>/<package>/<tag>
+~/.simplemotion/bin/<package>          → symlink to the active version
 ```
 
 ```
 ~/.simplemotion/share/
-├── release/     sm-welcome            ← public
-├── preview/     sm-welcome  sm-mcp    ← candidates, both ladders
-├── develop/     …
-├── testing/     …
-└── private/     sm-mcp  sm-govern     ← never published publicly
+├── release/
+│  └── sm-welcome/  v0.1.0  v0.0.9     ← every version ever installed
+├── preview/
+│  └── sm-mcp/      sm-mcp-v0.1.0-preview-249
+├── develop/  testing/  …
+└── private/                           ← never published publicly
+   └── sm-mcp/      sm-mcp-v0.1.0
 ```
+
+**Nothing is pruned.** The leaf is the release tag, so rolling back is
+re-pointing the symlink rather than a re-download:
+
+```bash
+ln -sfn ~/.simplemotion/share/release/sm-welcome/v0.0.9 ~/.simplemotion/bin/sm-welcome
+```
+
+Deleting a version directory by hand is safe as long as it is not the
+symlink's current target.
 
 The store is the source of truth; `~/.simplemotion/bin` holds only symlinks, so
 re-installing from a different channel just re-points the link. `--install-dir`

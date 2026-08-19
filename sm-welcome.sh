@@ -235,17 +235,27 @@ case "$CHANNEL_VAL" in
     # to the no-fast-path branch lets sm-install.sh report it accurately.
     *) CHANNEL_REPO=""; STORE_CHANNEL="" ;;
 esac
-STORE_BIN="$HOME/.simplemotion/share/${STORE_CHANNEL}/sm-welcome"
-if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -n "$STORE_CHANNEL" && -x "$STORE_BIN" ]]; then
-    LOCAL_VER=$("$STORE_BIN" -V 2>/dev/null | awk '{print $2}' | sed 's/^v//')
+# Ask the store whether it already holds the channel's latest TAG, rather
+# than asking the binary what version it thinks it is.
+#
+# The old check compared `sm-welcome -V` against the channel's tag, and on
+# the release channel those can never be equal: the binary stamps itself
+# from the develop tag it was built at (0.1.0-develop-229) while the release
+# channel's tag is the bare GA (0.1.0). So the fast path never once fired on
+# release — every run re-downloaded a binary it already had. Now that the
+# store is keyed BY tag, the question is just "is that file there?", which
+# cannot drift from what the binary reports because it no longer asks.
+STORE_DIR="$HOME/.simplemotion/share/${STORE_CHANNEL}/sm-welcome"
+if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -n "$STORE_CHANNEL" && -d "$STORE_DIR" ]]; then
     LATEST_TAG=$(gh_api "https://api.github.com/repos/${CHANNEL_REPO}/releases/latest" 2>/dev/null \
         | awk -F'"' '/"tag_name":/ {print $4; exit}' || true)
-    LATEST_VER="${LATEST_TAG#v}"
-    if [[ -n "$LOCAL_VER" && -n "$LATEST_VER" && "$LOCAL_VER" == "$LATEST_VER" ]]; then
+    if [[ -n "$LATEST_TAG" && -x "${STORE_DIR}/${LATEST_TAG}" ]]; then
         # Already have this channel's latest — re-point the active symlink
-        # (cheap) so switching channels takes effect without a re-download.
+        # (cheap) so switching channel or version takes effect without a
+        # download.
         mkdir -p "$INSTALL_DIR"
-        ln -sfn "$STORE_BIN" "$LOCAL_BIN"
+        ln -sfn "${STORE_DIR}/${LATEST_TAG}" "$LOCAL_BIN"
+        LOCAL_VER="$LATEST_TAG"
         SKIP_DOWNLOAD=1
     fi
 fi
@@ -349,7 +359,7 @@ if [[ $SKIP_DOWNLOAD -eq 0 ]]; then
     fi
     STEP_N=$(( STEP_N + DL_STEPS ))
 else
-    sm_note "sm-welcome is already this channel's latest ($LOCAL_VER) — download skipped."
+    sm_note "sm-welcome is already at this channel's latest ($LOCAL_VER) — download skipped."
 fi
 
 # ── sm-onboard ────────────────────────────────────────────────────────

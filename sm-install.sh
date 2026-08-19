@@ -509,12 +509,12 @@ EOF
 }
 
 install_to_dir() {
-    # Per-channel local store (latest-only): the verified binary is kept at
-    # ~/.simplemotion/share/<channel>/<package>, one current binary per
-    # channel. The install dir holds a SYMLINK to the active channel's copy,
-    # so re-installing from a different channel just re-points the link (the
-    # store is the source of truth). --install-dir / SM_INSTALL_DIR still
-    # choose where the symlink lives; the store path is fixed.
+    # Per-channel local store: the verified binary is kept at
+    # ~/.simplemotion/share/<channel>/<package>/<tag>. The install dir holds a
+    # SYMLINK to the active copy, so switching channel or version is a
+    # re-point rather than a download (the store is the source of truth).
+    # --install-dir / SM_INSTALL_DIR still choose where the symlink lives;
+    # the store path is fixed.
     #
     # CHANNEL FIRST, package second. It used to be <package>/sm-<channel>,
     # which scattered a channel's binaries across one directory per package.
@@ -527,10 +527,34 @@ install_to_dir() {
     # at all, because they can never download from it. The private binaries
     # are therefore both obvious and separable rather than interleaved with
     # public ones.
-    local store_dir="$HOME/.simplemotion/share/${CHANNEL}"
+    # VERSIONED, and nothing is pruned. The leaf is the release tag, so every
+    # version ever installed stays on disk and rolling back is re-pointing a
+    # symlink rather than a re-download. `bin/<package>` is the pointer that
+    # says which one is live.
+    #
+    # This is a deliberate change of policy: the store used to be latest-only
+    # and each install overwrote the last, so a bad release could only be
+    # undone by fetching an older one. Disk is the price -- roughly the size
+    # of the binary per retained version per channel, and sm-mcp-m365 alone is
+    # 12 MB. There is no pruning by design; deleting a version directory by
+    # hand is safe as long as it is not the symlink's target.
+    local store_dir="$HOME/.simplemotion/share/${CHANNEL}/${PACKAGE}"
+
+    # The pre-versioned layout kept the BINARY at exactly this path, as a
+    # file. It has to become a directory now, and mkdir will not do that over
+    # a file. Move it aside rather than deleting it outright: between removing
+    # it and writing the new copy the symlink would be dangling, and a failure
+    # in that window would leave the command missing entirely.
+    local displaced=""
+    if [ -f "$store_dir" ] && [ ! -d "$store_dir" ]; then
+        displaced="${store_dir}.superseded.$$"
+        mv "$store_dir" "$displaced"
+    fi
+
     mkdir -p "$store_dir" "$INSTALL_DIR"
-    install -m 0755 "$TMPBIN" "${store_dir}/${PACKAGE}"
-    ln -sfn "${store_dir}/${PACKAGE}" "${INSTALL_DIR}/${PACKAGE}"
+    install -m 0755 "$TMPBIN" "${store_dir}/${TAG}"
+    ln -sfn "${store_dir}/${TAG}" "${INSTALL_DIR}/${PACKAGE}"
+    [ -n "$displaced" ] && rm -f "$displaced"
 
     # Retire this package's legacy per-package store for THIS channel, after
     # the new copy and the symlink are in place. Left alone it would strand a
@@ -545,7 +569,7 @@ install_to_dir() {
         printf '  [%s✓%s] %s Retired legacy store %s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$legacy_dir"
     fi
     write_receipt "$PACKAGE" "$CHANNEL" "$TAG" "$SOURCE_REPO" "$actual"
-    printf '  [%s✓%s] %s Installed %s %s to %s, linked %s/%s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$PACKAGE" "$TAG" "$store_dir" "$INSTALL_DIR" "$PACKAGE"
+    printf '  [%s✓%s] %s Installed %s %s to %s, linked %s/%s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$PACKAGE" "$TAG" "${store_dir}/${TAG}" "$INSTALL_DIR" "$PACKAGE"
     case ":$PATH:" in
         *":$INSTALL_DIR:"*) ;;
         *) printf '  [%s!%s] %s is not on $PATH — add it to your shell init to run %s directly\n' "$DIM" "$RESET" "$INSTALL_DIR" "$PACKAGE" ;;
