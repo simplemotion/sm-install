@@ -37,11 +37,12 @@
 #                                channel's copy (a plain copy where Windows
 #                                symlink privilege is unavailable).
 #   -Version TAG                 Pin a specific tag.
-#   -Channel release|preview|develop|testing|staff
+#   -Channel release|preview|develop|testing|private
 #                                Default: $env:SM_CHANNEL or 'release'.
-#                                develop/testing/staff are not public and need
-#                                an authenticated gh. 'staff' is the GA channel
-#                                for products never published publicly.
+#                                Only release is public; the rest need an
+#                                authenticated gh. 'private' is the GA channel
+#                                for products never published publicly, and
+#                                sits beside release as a second terminal.
 #   -AssetSuffix short|triple    Asset-name suffix style:
 #                                  short  = `<package>-win-<arch>.exe`
 #                                           (default) with arm64/x64 short
@@ -61,7 +62,7 @@ param(
     [ValidateSet('install','run','install-and-run')] [string]$Mode = 'install',
     [string]$InstallDir = '',
     [string]$Version = '',
-    [ValidateSet('release','preview','develop','testing','staff','private')] [string]$Channel = '',
+    [ValidateSet('release','preview','develop','testing','private')] [string]$Channel = '',
     [ValidateSet('short','triple')] [string]$AssetSuffix = 'short',
     [string[]]$BinArgs = @()
 )
@@ -94,12 +95,10 @@ Invoke-Pwsh7Guard -ScriptUrl 'https://install.simplemotion.com/sm-install.ps1' -
 $env:PATH = (Join-Path $HOME '.simplemotion\bin') + ';' + (Join-Path $HOME '.local\bin') + ';' + $env:PATH
 
 if (-not $Channel) { $Channel = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' } }
-# Legacy alias: the sm-private channel repo was renamed sm-develop. Old
-# install receipts record channel = "private"; keep them working.
-if ($Channel -eq 'private') {
-    Write-Host "  [!] channel 'private' is now 'develop'; continuing as develop" -ForegroundColor Yellow
-    $Channel = 'develop'
-}
+# 'private' USED to be a legacy alias for develop, from when the sm-private
+# channel repo was renamed sm-develop. It is now a channel in its own right --
+# the GA terminal for products that never leave SimpleMotion -- so the alias is
+# gone rather than silently redirecting a caller to a channel they did not name.
 # Channel -> repo defaulting. Each channel maps to its own GitHub repo.
 if (-not $Repo) { $Repo = "simplemotion/sm-$Channel" }
 if (-not $SourceRepo) { $SourceRepo = $Repo }

@@ -10,7 +10,7 @@ This is the public bootstrap entry point served at **`install.simplemotion.com`*
 | `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | cohort | Early-access consumers — features in flight |
 | `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | staff | Earliest development builds |
 | `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | staff | In-flight test builds |
-| `staff` | [simplemotion/sm-staff](https://github.com/simplemotion/sm-staff) | staff | **GA** builds of products that are never published publicly |
+| `private` | [simplemotion/sm-private](https://github.com/simplemotion/sm-private) | staff | **GA** builds of products that are never published publicly |
 
 Each channel repo has its own `releases/latest` namespace, so channel selection is unambiguous and there's no prerelease-flag coordination required.
 
@@ -37,15 +37,15 @@ has exactly one terminal:
 ```
                             ┌→ preview → release(-NNN) → GA vX.Y.Z   PUBLIC
 develop → testing ──────────┤
-                            └→ staff (GA vX.Y.Z)                     STAFF ONLY
+                            └→ private (GA vX.Y.Z)                   STAFF ONLY
 
 v0.1.0-develop-249 → v0.1.0-testing-249 → v0.1.0-preview-249 → v0.1.0-release-249 → v0.1.0
 ```
 
 Which fork a package takes is decided by `channels/public-packages.txt` in
 `3400-9993-SM-Publish` — **default deny**, so a package is staff-only until it
-is explicitly listed as public-eligible. `sm-staff` carries finalised
-`vX.Y.Z` only; there is no `-staff-NNN` stage, because `testing` is the
+is explicitly listed as public-eligible. `sm-private` carries finalised
+`vX.Y.Z` only; there is no `-private-NNN` stage, because `testing` is the
 candidate rung for both ladders.
 
 ## Install — sm-welcome (onboarding CLI)
@@ -93,9 +93,9 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 | `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` (not public — requires authed `gh` and cohort membership) |
 | `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (not public — requires authed `gh` with read access) |
 | `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (not public — requires authed `gh`) |
-| `--channel staff` or `SM_CHANNEL=staff` | newest GA release on `simplemotion/sm-staff` (not public — requires authed `gh`) |
+| `--channel private` or `SM_CHANNEL=private` | newest GA release on `simplemotion/sm-private` (not public — requires authed `gh`) |
 
-`--channel private` / `SM_CHANNEL=private` is accepted as a legacy alias for `develop` (the `sm-private` channel repo was renamed `sm-develop`).
+`private` was a legacy alias for `develop` until 2026-08-19, from when the `sm-private` channel repo was renamed `sm-develop`. It is now a channel in its own right and no longer redirects.
 
 ## What the installers do
 

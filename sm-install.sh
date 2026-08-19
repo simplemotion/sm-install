@@ -16,19 +16,22 @@
 #                                .exe on this script; .ps1 adds it).
 #
 # Optional flags:
-#   --channel release|preview|develop|testing|staff
+#   --channel release|preview|develop|testing|private
 #                                Channel to resolve into a tag. Each
 #                                channel maps to its own GitHub repo:
 #                                  release → simplemotion/sm-release  (public)
 #                                  preview → simplemotion/sm-preview  (cohort — needs authed gh)
 #                                  develop → simplemotion/sm-develop  (staff — needs authed gh)
 #                                  testing → simplemotion/sm-testing  (staff — needs authed gh)
-#                                  staff   → simplemotion/sm-staff    (staff — needs authed gh)
+#                                  private → simplemotion/sm-private  (staff — needs authed gh)
 #                                Default: $SM_CHANNEL or 'release'.
-#                                'staff' is the GA channel for products that
-#                                are never published publicly. It is a
-#                                TERMINAL, like release: it carries finalised
-#                                vX.Y.Z only, never a -NNN candidate.
+#                                'private' is the GA channel for products
+#                                that are never published publicly. It sits
+#                                beside release and is a TERMINAL like it:
+#                                finalised vX.Y.Z only, never a -NNN
+#                                candidate. Until 2026-08-19 'private' was a
+#                                legacy ALIAS for develop; it is now a channel
+#                                in its own right and no longer redirects.
 #   --repo OWNER/NAME            Override the channel→repo default.
 #                                Useful for development or hosting on a
 #                                non-SimpleMotion repo.
@@ -171,13 +174,21 @@ esac
 # `releases/latest` on each is unambiguous and there's no prerelease
 # flag dance. `--repo` overrides for development / external use.
 case "$CHANNEL" in
-    release|preview|develop|testing|staff) ;;
-    private)
-        # Legacy alias: the sm-private channel repo was renamed sm-develop.
-        # Old install receipts record channel = "private"; keep them working.
-        echo "sm-install.sh: channel 'private' is now 'develop'; continuing as develop" >&2
-        CHANNEL="develop" ;;
-    *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing|staff)" >&2; exit 1 ;;
+    release|preview|develop|testing|private) ;;
+    # 'private' USED to be a legacy alias for develop, from when the
+    # sm-private channel repo was renamed sm-develop. It is now a channel in
+    # its own right — the GA terminal for products that never leave
+    # SimpleMotion — so the alias is gone rather than silently redirecting a
+    # caller to a different channel than the one they named. Nothing
+    # automated depended on it: install receipts record the channel but are
+    # only ever written, never read back to select one.
+    staff)
+        # The private channel was called 'staff' for part of 2026-08-19,
+        # before it was named. Fail rather than guess: it never shipped in a
+        # release of this script, so anyone passing it is reading stale notes.
+        echo "sm-install.sh: channel 'staff' was renamed 'private' before release; use --channel private" >&2
+        exit 1 ;;
+    *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing|private)" >&2; exit 1 ;;
 esac
 if [[ -z "$REPO" ]]; then
     REPO="simplemotion/sm-${CHANNEL}"
@@ -270,7 +281,7 @@ if [[ -z "$VERSION" ]]; then
             # sends a staff member hunting for a release that is sitting right
             # there, so say which case we cannot rule out.
             case "$CHANNEL" in
-                preview|develop|testing|staff)
+                preview|develop|testing|private)
                     if [ -z "$SM_GH_TOKEN" ]; then
                         printf '\n  [x] Cannot read the %s channel: no GitHub credentials found.\n' "$CHANNEL"
                         printf '      https://github.com/%s is not public, so an unauthenticated\n' "$REPO"
@@ -298,7 +309,7 @@ URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 
 # Download one named asset of the resolved release to a path. Public
 # channel repo (sm-release) serves the plain browser download URL. Every
-# other channel (sm-preview, sm-develop, sm-testing, sm-staff)
+# other channel (sm-preview, sm-develop, sm-testing, sm-private)
 # 404s on it for everyone, so with a token present resolve the asset's
 # API url from the release JSON and fetch it as an octet-stream; fall
 # back to the browser URL when unauthenticated or the asset is missing.
