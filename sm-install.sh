@@ -354,16 +354,30 @@ trap 'rm -f "$TMPBIN" "$TMPSUM" "$TMPATT" "$TMPATT_RAW"' EXIT
 # download-phase steps + 15 onboarding steps); the wrapper script
 # (sm-welcome.sh) exports SM_WELCOME_STEPS_TOTAL to keep these in lock-step.
 STEPS_TOTAL="${SM_WELCOME_STEPS_TOTAL:-20}"
+# Where this invocation's five steps sit in the bootstrap's overall count.
+# sm-welcome.sh sets it before each call; standalone it is 0 and the steps
+# number from 1 as they always did.
+STEPS_OFFSET="${SM_WELCOME_STEPS_OFFSET:-0}"
+
 fmt_step() {
-    # $1 = 1-based step index, $2 = width-zero-padded
-    printf '[%02d/%s]' "$1" "$STEPS_TOTAL"
+    # $1 = 1-based step index within THIS invocation
+    printf '[%02d/%s]' "$(( $1 + STEPS_OFFSET ))" "$STEPS_TOTAL"
 }
 
 # Phase header — matches sm-welcome's `phase_header` formatting so the
 # download output frames as one continuous workflow. Rule width is
 # 36 - len("Download") = 28 dashes (same formula as the Rust side).
-printf '\n  %s──%s %sDownload%s %s────────────────────────────%s\n' \
-    "$DIM" "$RESET" "$BOLD" "$RESET" "$DIM" "$RESET"
+#
+# Suppressed when the bootstrap already opened the phase. sm-welcome.sh
+# calls this script twice inside one Download phase (sm-welcome, then
+# sm-onboard); printing our own header each time gave that phase three
+# rules — its own plus one per package — and made two passes of the same
+# phase look like two phases. The offset being set is exactly the signal
+# that someone upstream is framing this.
+if [[ -z "${SM_WELCOME_STEPS_OFFSET:-}" ]]; then
+    printf '\n  %s──%s %sDownload%s %s────────────────────────────%s\n' \
+        "$DIM" "$RESET" "$BOLD" "$RESET" "$DIM" "$RESET"
+fi
 
 printf '  [%s✓%s] %s Platform: %s (channel=%s, tag=%s)\n' \
     "$GREEN" "$RESET" "$(fmt_step 1)" "$TARGET" "$CHANNEL" "$TAG"

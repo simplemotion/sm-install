@@ -83,13 +83,56 @@ sm_route_tmpdir
 # sm-welcome's step-counter UI accounts for the bootstrap's pre-binary
 # steps via env vars the binary reads (banner suppression + offset).
 export SM_WELCOME_NO_BANNER=1
-export SM_WELCOME_STEPS_OFFSET=5
-# Binary has 18 internal steps on macOS / 17 on Linux (Linux omits the
-# macOS-only touchid step). Bootstrap contributes 5 silent steps, so
-# 5 + 18 = 23 — sized for macOS (the deployed fleet); on Linux the final
-# step shows [22/23], one short, which is harmless.
-# Update if the binary's step count changes.
-export SM_WELCOME_STEPS_TOTAL=23
+
+# ── Step budget ───────────────────────────────────────────────────────
+# One counter runs from the first prerequisite to the last binary step, so
+# every phase needs to agree on the total BEFORE the first line is printed.
+#
+# This used to be two hardcoded numbers (OFFSET=5, TOTAL=23) resting on the
+# claim that the binary had 18 steps. It has 19. The last step therefore
+# rendered `[24/23]` — a counter past its own total — and the comment
+# describing it as "one short" documented a state that had stopped being
+# true. Hardcoding a number that lives in another repo is what failed, so
+# the constants are at least named and checkable now:
+#
+#   sm-welcome --list | grep -c '^ '     # the binary's own step count
+#
+# PREREQ is this script's Prerequisites phase; DL is one sm-install.sh
+# invocation, which always prints five numbered steps.
+PREREQ_STEPS=3
+DL_STEPS=5
+case "$(uname -s)" in
+    Darwin) BIN_STEPS=19 ;;   # includes the macOS-only touchid step
+    *)      BIN_STEPS=18 ;;   # Linux omits it
+esac
+
+# Colours, matching sm-install.sh so the two halves of the bootstrap render
+# as one workflow rather than two programs.
+if [[ -t 1 ]]; then
+    C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[31m'
+    C_CYAN=$'\033[96m';  C_DIM=$'\033[2m';     C_OFF=$'\033[0m'
+else
+    C_GREEN=''; C_YELLOW=''; C_RED=''; C_CYAN=''; C_DIM=''; C_OFF=''
+fi
+
+# Global step cursor. sm_step prints one numbered line and advances it;
+# sm_note prints an unnumbered continuation under the line above.
+STEP_N=0
+STEP_TOTAL=0
+sm_step() {
+    # $1 = marker glyph, $2 = colour, $3.. = message
+    local glyph="$1" colour="$2"; shift 2
+    STEP_N=$(( STEP_N + 1 ))
+    printf '  [%s%s%s] %s[%02d/%02d]%s %s\n' \
+        "$colour" "$glyph" "$C_OFF" "$C_DIM" "$STEP_N" "$STEP_TOTAL" "$C_OFF" "$*"
+}
+sm_ok()   { sm_step '✓' "$C_GREEN"  "$@"; }
+sm_work() { sm_step '*' "$C_CYAN"   "$@"; }
+sm_warn() { sm_step '!' "$C_YELLOW" "$@"; }
+sm_fail() { sm_step '✗' "$C_RED"    "$@"; }
+# Continuation under the previous line — indented to the width of
+# "  [x] [NN/NN] " so it reads as detail, not as another step.
+sm_note() { printf '         %s%s%s\n' "$C_DIM" "$*" "$C_OFF"; }
 
 # Pre-parse our own flags: --channel goes to sm-install.sh; everything
 # else forwards to the sm-welcome binary. SM_CHANNEL env var also
@@ -171,53 +214,14 @@ else
     PWSH_STATE="missing"
 fi
 
-confirm_section "Section 1 of 3: Prerequisites"
-
-# Hard-stop only if curl is missing — without it we can't fetch anything.
+# Hard-stop only if curl is missing — without it we can't fetch anything,
+# including the version probe immediately below.
 if [[ "$CURL_STATE" == "missing" ]]; then
-    printf '  [x] curl is required to continue. Install it via your package manager.\n' >&2
+    printf '  [%s✗%s] curl is required to continue. Install it via your package manager.\n' \
+        "$C_RED" "$C_OFF" >&2
     exit 1
 fi
-if [[ "$GIT_STATE" == "missing" ]]; then
-    printf '  [!] git not found — sm-welcome will report this in its preflight.\n'
-fi
-if [[ "$PWSH_STATE" == "missing" ]]; then
-    printf '  [*] Installing PowerShell 7 (PowerShell/PowerShell latest, SHA256-verified)...\n'
-    if ensure_pwsh; then
-        printf '  [v] PowerShell 7 installed: %s\n' "$PWSH_BIN"
-    else
-        printf '  [!] PowerShell 7 install failed — the M365/Exchange admin scripts (sm-set-*.ps1) will need pwsh installed manually.\n'
-    fi
-else
-    printf '  [v] PowerShell 7 present: %s\n' "$HOME/.local/bin/pwsh-7/pwsh"
-fi
-if [[ "$COSIGN_STATE" == "missing" ]]; then
-    printf '  [*] Installing cosign (sigstore/cosign latest, SHA256-verified)...\n'
-    if ensure_cosign; then
-        printf '  [v] cosign installed: %s\n' "$COSIGN_BIN"
-    else
-        printf '  [!] cosign install failed — Section 2 will skip attestation verification (SHA256 still anchors integrity).\n'
-    fi
-else
-    COSIGN_BIN="$HOME/.local/bin/cosign"
-fi
-if [[ -n "${COSIGN_BIN:-}" ]]; then
-    printf '  [*] Initializing cosign TUF trust (tuf-repo.github.com)...\n'
-    if initialize_cosign_tuf "$COSIGN_BIN"; then
-        printf '  [v] cosign TUF initialized in %s\n' "$TUF_ROOT"
-    else
-        printf '  [!] cosign TUF init failed — Section 2 will skip attestation verification.\n'
-    fi
-fi
 
-# ── Section 2: sm-welcome ─────────────────────────────────────────────
-# Fast-path resolution — channel-aware. The per-channel store
-# (~/.simplemotion/share/<channel>/sm-welcome) holds the binary
-# we last installed for THIS channel. If its version already matches the
-# channel's latest release, skip the download — and re-point the
-# ~/.simplemotion/bin symlink at it, so a channel *switch* still takes effect
-# without a download. We check the channel's own stored binary (not the
-# bin/ symlink, which may currently point at a different channel).
 SKIP_DOWNLOAD=0
 LOCAL_VER=""
 LATEST_VER=""
@@ -246,9 +250,92 @@ if [[ -z "${SM_WELCOME_SKIP_FAST_PATH:-}" && -n "$STORE_CHANNEL" && -x "$STORE_B
     fi
 fi
 
-confirm_section "Section 2 of 3: sm-welcome"
+
+# Whether sm-onboard needs fetching, decided on the same terms Section 2
+# uses further down. Resolved HERE, before anything prints, because the
+# step total has to include it: a counter that cannot say how many steps
+# there are until halfway through is not a counter.
+NEED_ONBOARD=0
+if [[ $SKIP_DOWNLOAD -eq 0 || ! -x "${INSTALL_DIR}/sm-onboard" ]]; then
+    NEED_ONBOARD=1
+fi
+
+DOWNLOAD_PASSES=$(( (SKIP_DOWNLOAD == 0 ? 1 : 0) + NEED_ONBOARD ))
+STEP_TOTAL=$(( PREREQ_STEPS + DOWNLOAD_PASSES * DL_STEPS + BIN_STEPS ))
+
+confirm_section "Prerequisites"
+# git is not installed here — the binary's preflight reports it — so this is
+# a continuation line, not a step. Only things this phase actually DOES get
+# a number, otherwise the count would drift with the weather.
+if [[ "$GIT_STATE" == "missing" ]]; then
+    sm_note "git not found — sm-welcome will report this in its preflight."
+fi
+
+# Each of the three below prints exactly ONE numbered line whichever way it
+# goes: installed, already present, or failed. That is what keeps the
+# counter contiguous — a phase whose step count depends on the outcome
+# cannot be numbered against a total computed up front.
+if [[ "$PWSH_STATE" == "missing" ]]; then
+    printf '  [%s*%s] %s[%02d/%02d]%s Installing PowerShell 7 (PowerShell/PowerShell latest, SHA256-verified)...\n' \
+        "$C_CYAN" "$C_OFF" "$C_DIM" "$(( STEP_N + 1 ))" "$STEP_TOTAL" "$C_OFF"
+    if ensure_pwsh; then
+        sm_ok "PowerShell 7 installed: $PWSH_BIN"
+    else
+        sm_warn "PowerShell 7 install failed"
+        sm_note "The M365/Exchange admin scripts (sm-set-*.ps1) will need pwsh installed manually."
+    fi
+else
+    sm_ok "PowerShell 7 present: $HOME/.local/bin/pwsh-7/pwsh"
+fi
+
+if [[ "$COSIGN_STATE" == "missing" ]]; then
+    printf '  [%s*%s] %s[%02d/%02d]%s Installing cosign (sigstore/cosign latest, SHA256-verified)...\n' \
+        "$C_CYAN" "$C_OFF" "$C_DIM" "$(( STEP_N + 1 ))" "$STEP_TOTAL" "$C_OFF"
+    if ensure_cosign; then
+        sm_ok "cosign installed: $COSIGN_BIN"
+    else
+        sm_warn "cosign install failed"
+        sm_note "Attestation verification will be skipped; SHA256 still anchors integrity."
+    fi
+else
+    COSIGN_BIN="$HOME/.local/bin/cosign"
+    sm_ok "cosign present: $COSIGN_BIN"
+fi
+
+if [[ -n "${COSIGN_BIN:-}" ]]; then
+    printf '  [%s*%s] %s[%02d/%02d]%s Initializing cosign TUF trust (tuf-repo.github.com)...\n' \
+        "$C_CYAN" "$C_OFF" "$C_DIM" "$(( STEP_N + 1 ))" "$STEP_TOTAL" "$C_OFF"
+    if initialize_cosign_tuf "$COSIGN_BIN"; then
+        sm_ok "cosign TUF initialized in $TUF_ROOT"
+    else
+        sm_warn "cosign TUF init failed"
+        sm_note "Attestation verification will be skipped; SHA256 still anchors integrity."
+    fi
+else
+    # cosign never arrived, so there is no trust store to initialise. The
+    # step is still numbered and still reported: a silently absent step is
+    # how a counter starts lying about what ran.
+    sm_warn "cosign TUF trust skipped — cosign unavailable"
+fi
+
+# ── Section 2: sm-welcome ─────────────────────────────────────────────
+# Fast-path resolution — channel-aware. The per-channel store
+# (~/.simplemotion/share/<channel>/sm-welcome) holds the binary
+# we last installed for THIS channel. If its version already matches the
+# channel's latest release, skip the download — and re-point the
+# ~/.simplemotion/bin symlink at it, so a channel *switch* still takes effect
+# without a download. We check the channel's own stored binary (not the
+# bin/ symlink, which may currently point at a different channel).
+export SM_WELCOME_STEPS_TOTAL="$STEP_TOTAL"
+
+confirm_section "Download"
 
 if [[ $SKIP_DOWNLOAD -eq 0 ]]; then
+    # Each sm-install.sh pass numbers its five steps from 1; the offset is
+    # what makes them continue this script's count instead of restarting.
+    # Without it both passes printed [01..05] and the binary then resumed
+    # from a number neither of them had reached.
+    export SM_WELCOME_STEPS_OFFSET="$STEP_N"
     INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")
     if ! bash -c "$INSTALL_SH" sm-install \
         --package sm-welcome \
@@ -256,10 +343,13 @@ if [[ $SKIP_DOWNLOAD -eq 0 ]]; then
         --source-repo 3400-0000-SM-Software/3400-0009-SM-Welcome \
         --mode install \
         ${CHANNEL_ARG[@]+"${CHANNEL_ARG[@]}"}; then
-        printf '\n  [x] sm-welcome could not be installed from the %s channel (see the message above).\n\n' "${CHANNEL_VAL}" >&2
+        printf '\n  [%s✗%s] sm-welcome could not be installed from the %s channel (see the message above).\n\n' \
+            "$C_RED" "$C_OFF" "${CHANNEL_VAL}" >&2
         exit 1
     fi
-
+    STEP_N=$(( STEP_N + DL_STEPS ))
+else
+    sm_note "sm-welcome is already this channel's latest ($LOCAL_VER) — download skipped."
 fi
 
 # ── sm-onboard ────────────────────────────────────────────────────────
@@ -281,7 +371,8 @@ fi
 # enumerated, not found, and dropped). Making this fatal would break every
 # install from an existing release, on every channel, until each is re-cut.
 # A workstation without sm-onboard is fully functional — only admins invoke it.
-if [[ $SKIP_DOWNLOAD -eq 0 || ! -x "${INSTALL_DIR}/sm-onboard" ]]; then
+if [[ $NEED_ONBOARD -eq 1 ]]; then
+    export SM_WELCOME_STEPS_OFFSET="$STEP_N"
     : "${INSTALL_SH:=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")}"
     if ! bash -c "$INSTALL_SH" sm-install \
         --package sm-onboard \
@@ -289,15 +380,20 @@ if [[ $SKIP_DOWNLOAD -eq 0 || ! -x "${INSTALL_DIR}/sm-onboard" ]]; then
         --source-repo 3400-0000-SM-Software/3400-0009-SM-Welcome \
         --mode install \
         ${CHANNEL_ARG[@]+"${CHANNEL_ARG[@]}"}; then
-        printf '\n  [!] sm-onboard was not installed from the %s channel — continuing.\n' "${CHANNEL_VAL}" >&2
-        printf '      Expected if this release predates simplemotion/sm-ci#28, which is what\n' >&2
-        printf '      first built workspace members. Admins can re-run this installer after the\n' >&2
-        printf '      next release on that channel; everyone else does not need it.\n\n' >&2
+        printf '\n  [%s!%s] sm-onboard was not installed from the %s channel — continuing.\n' \
+            "$C_YELLOW" "$C_OFF" "${CHANNEL_VAL}" >&2
+        printf '         Expected if this release predates simplemotion/sm-ci#28, which is what\n' >&2
+        printf '         first built workspace members. Admins can re-run this installer after the\n' >&2
+        printf '         next release on that channel; everyone else does not need it.\n\n' >&2
     fi
+    STEP_N=$(( STEP_N + DL_STEPS ))
 fi
 
 # ── Section 3: Launch ─────────────────────────────────────────────────
-confirm_section "Section 3 of 3: Launch"
+# The binary picks the count up from here and runs it out to STEP_TOTAL.
+export SM_WELCOME_STEPS_OFFSET="$STEP_N"
+
+confirm_section "Setup"
 
 exec_local() {
     if (: </dev/tty) 2>/dev/null; then
