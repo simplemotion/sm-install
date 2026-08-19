@@ -238,14 +238,21 @@ ASSET="${PACKAGE}-${SUFFIX}"
 #   rather than needing to be deployed in lockstep with it.
 if [[ -z "$VERSION" ]]; then
     # Probe the package-prefixed namespace before the bare pointer.
+    #
+    # per_page=100 because the channel repos are SHARED: sm-develop already
+    # holds 49 releases across 17 packages. The API default of 30 is a
+    # deadline, not a limit — once a package's newest release falls past it,
+    # this scan finds nothing and the error says 'No <channel> build of <pkg>
+    # is published yet', which reads like it was never released rather than
+    # like a page-size bug. sm-mcp sat at index 17 of 30 on 2026-08-19.
     if [[ -z "$TAG_PREFIX" && -n "$PACKAGE" ]]; then
-        PROBE=$(gh_api "https://api.github.com/repos/${REPO}/releases" 2>/dev/null || true)
+        PROBE=$(gh_api "https://api.github.com/repos/${REPO}/releases?per_page=100" 2>/dev/null || true)
         PROBE_TAG=$(awk -v prefix="${PACKAGE}-v" '
                         /"tag_name":/ { if ($0 ~ ("\"" prefix)) { print $0; exit } }' <<<"$PROBE"                     | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
         [[ -n "$PROBE_TAG" ]] && TAG_PREFIX="${PACKAGE}-"
     fi
     if [[ -n "$TAG_PREFIX" ]]; then
-        RELEASES_JSON=$(gh_api "https://api.github.com/repos/${REPO}/releases" 2>/dev/null || true)
+        RELEASES_JSON=$(gh_api "https://api.github.com/repos/${REPO}/releases?per_page=100" 2>/dev/null || true)
         TAG=$(awk -v prefix="$TAG_PREFIX" '
                   /"tag_name":/ {
                       if ($0 ~ ("\"" prefix)) { print $0; exit }
@@ -412,7 +419,13 @@ if [[ -s "$TMPATT" ]] && [[ -n "$COSIGN_BIN" ]]; then
     # and bind the source repo separately via the workflow-repository claim.
     # (Pinning the source repo AS the identity, the old behaviour, never matched
     # and always rejected the bundle.)
-    cert_id_regex="https://github.com/simplemotion/sm-ci/\.github/workflows/sm-ci\.yml@.*"
+    # sm-ci MOVED. It was simplemotion/sm-ci and is now
+    # 3400-0000-SM-Software/3400-9991-SM-CI, so post-migration attestations
+    # carry the new identity and pre-migration ones carry the old. BOTH are
+    # accepted: releases already sitting in the channels were signed under the
+    # old identity and must stay installable. Drop the old alternative only
+    # once every published release has been re-cut.
+    cert_id_regex="https://github.com/(simplemotion/sm-ci|3400-0000-SM-Software/3400-9991-SM-CI)/\.github/workflows/sm-ci\.yml@.*"
     if "$COSIGN_BIN" verify-blob-attestation \
         --bundle "$TMPATT" \
         --new-bundle-format \
