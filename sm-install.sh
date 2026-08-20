@@ -111,11 +111,17 @@ gh_api() {
     fi
 }
 
+# Where the bootstrap fetches its siblings from. Overridable so a branch can
+# be exercised end-to-end before it is deployed — `SM_INSTALL_BASE=file://$PWD`
+# runs the working tree, which is what tests/render-test.sh does. Defaults to
+# production, so every documented one-liner is unaffected.
+SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.com}"
+
 # Source the shared install-toolchain library (confirm_section,
 # find_cosign, ensure_cosign, initialize_cosign_tuf). sm-welcome.sh
 # loads the same lib at startup, so functions are consistent across
 # the bootstrap and standalone-install code paths.
-eval "$(curl -fsSL https://install.simplemotion.com/sm-install-lib.sh)"
+eval "$(curl -fsSL "${SM_INSTALL_BASE}/sm-install-lib.sh")"
 
 # Route tempfiles under ~/SimpleMotion/.tmpdir before the first mktemp.
 # Standalone invocations (sm-welcome.sh has already set this, but
@@ -332,12 +338,10 @@ download_asset() {
     curl -fsSL "https://github.com/${REPO}/releases/download/${TAG}/${asset_name}" -o "$out_path"
 }
 
-# TTY-aware colours.
-if [[ -t 1 ]]; then
-    GREEN=$'\e[92m'; RED=$'\e[91m'; DIM=$'\e[38;5;244m'; BOLD=$'\e[1m'; RESET=$'\e[0m'; ERASE=$'\r\e[K'
-else
-    GREEN=''; RED=''; DIM=''; BOLD=''; RESET=''; ERASE=''
-fi
+# Palette comes from sm-install-lib.sh (sourced above), so this script and
+# sm-welcome.sh tick in the same green. The copy that used to live here had
+# its own dim — 38;5;244 against everyone else's 2 — which is why the
+# checksum and provenance detail read a shade apart from the rest.
 
 TMPBIN=$(sm_mktemp)
 TMPSUM=$(sm_mktemp)
@@ -348,25 +352,15 @@ TMPATT_RAW=$(sm_mktemp)
 TMPATT="${TMPATT_RAW}.sigstore.jsonl"
 trap 'rm -f "$TMPBIN" "$TMPSUM" "$TMPATT" "$TMPATT_RAW"' EXIT
 
-# Step numbering — matches sm-welcome's `[NN/TOTAL]` counter so the
-# Download phase and the binary's onboarding steps read as one
-# continuous numbered sequence (01..TOTAL). Defaults to 20 (= 5
-# download-phase steps + 15 onboarding steps); the wrapper script
-# (sm-welcome.sh) exports SM_WELCOME_STEPS_TOTAL to keep these in lock-step.
-STEPS_TOTAL="${SM_WELCOME_STEPS_TOTAL:-20}"
-# Where this invocation's five steps sit in the bootstrap's overall count.
-# sm-welcome.sh sets it before each call; standalone it is 0 and the steps
-# number from 1 as they always did.
-STEPS_OFFSET="${SM_WELCOME_STEPS_OFFSET:-0}"
-
-fmt_step() {
-    # $1 = 1-based step index within THIS invocation
-    printf '[%02d/%s]' "$(( $1 + STEPS_OFFSET ))" "$STEPS_TOTAL"
-}
-
-# Phase header — matches sm-welcome's `phase_header` formatting so the
-# download output frames as one continuous workflow. Rule width is
-# 36 - len("Download") = 28 dashes (same formula as the Rust side).
+# Step numbering comes from the lib's cursor, seeded from
+# SM_WELCOME_STEPS_OFFSET / _TOTAL so this script's five steps continue the
+# bootstrap's count instead of restarting at 1. This script prints exactly
+# five numbered lines — platform, download, checksum, provenance, install —
+# and everything else is an sm_note, because the caller budgets DL_STEPS=5
+# per invocation and a sixth numbered line would walk the total.
+# Phase header — sm_phase, the same function sm-welcome.sh and (in its Rust
+# form) the binary use, rather than a hand-drawn rule that had to be kept in
+# step by counting dashes in a comment.
 #
 # Suppressed when the bootstrap already opened the phase. sm-welcome.sh
 # calls this script twice inside one Download phase (sm-welcome, then
@@ -375,28 +369,22 @@ fmt_step() {
 # phase look like two phases. The offset being set is exactly the signal
 # that someone upstream is framing this.
 if [[ -z "${SM_WELCOME_STEPS_OFFSET:-}" ]]; then
-    printf '\n  %s──%s %sDownload%s %s────────────────────────────%s\n' \
-        "$DIM" "$RESET" "$BOLD" "$RESET" "$DIM" "$RESET"
+    sm_phase 'Download'
 fi
 
-printf '  [%s✓%s] %s Platform: %s (channel=%s, tag=%s)\n' \
-    "$GREEN" "$RESET" "$(fmt_step 1)" "$TARGET" "$CHANNEL" "$TAG"
+sm_ok "Resolved $PACKAGE $TAG (channel=$CHANNEL, $TARGET)"
 
 # Download binary.
-if [[ -t 1 ]]; then
-    printf '  [*] %s Downloading %s...' "$(fmt_step 2)" "$PACKAGE"
-else
-    printf '  [*] %s Downloading %s...\n' "$(fmt_step 2)" "$PACKAGE"
-fi
+sm_working "Downloading $PACKAGE..."
 if ! download_asset "$ASSET" "$TMPBIN"; then
-    printf '%s  [%s✗%s] Failed to download %s\n' "$ERASE" "$RED" "$RESET" "$URL" >&2
+    sm_fail "Failed to download $URL" >&2
     exit 1
 fi
-printf '%s  [%s✓%s] %s Downloaded %s\n' "$ERASE" "$GREEN" "$RESET" "$(fmt_step 2)" "$ASSET"
+sm_ok "Downloaded $ASSET"
 
 # Download + verify SHA256.
 if ! download_asset "${ASSET}.sha256" "$TMPSUM"; then
-    printf '  [%s✗%s] Failed to download %s.sha256\n' "$RED" "$RESET" "$URL" >&2
+    sm_fail "Failed to download ${URL}.sha256" >&2
     exit 1
 fi
 expected=$(awk 'NR==1 {print $1}' "$TMPSUM")
@@ -405,14 +393,16 @@ if command -v sha256sum >/dev/null 2>&1; then
 elif command -v shasum >/dev/null 2>&1; then
     actual=$(shasum -a 256 "$TMPBIN" | awk '{print $1}')
 else
-    echo "  [${RED}✗${RESET}] Neither sha256sum nor shasum available — cannot verify download" >&2
+    sm_fail 'Neither sha256sum nor shasum available — cannot verify download' >&2
     exit 1
 fi
 if [[ "$expected" != "$actual" ]]; then
-    printf '  [%s✗%s] SHA256 mismatch for %s: expected %s, got %s\n' "$RED" "$RESET" "$ASSET" "$expected" "$actual" >&2
+    sm_fail "SHA256 mismatch for $ASSET" >&2
+    sm_note "expected $expected" >&2
+    sm_note "got      $actual" >&2
     exit 1
 fi
-printf '  [%s✓%s] %s Checksum verified %s(SHA256: %s)%s\n' "$GREEN" "$RESET" "$(fmt_step 3)" "$DIM" "$actual" "$RESET"
+sm_ok "Checksum verified ${C_DIM}(SHA256 ${actual:0:8}…${actual: -8})${C_OFF}"
 
 # Default TUF_ROOT if Section 1 hasn't been through (e.g., sm-install.sh
 # invoked standalone).
@@ -462,15 +452,15 @@ if [[ -s "$TMPATT" ]] && [[ -n "$COSIGN_BIN" ]]; then
         --certificate-github-workflow-repository "$SOURCE_REPO" \
         --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
         "$TMPBIN" >/dev/null 2>&1; then
-        printf '  [%s✓%s] %s Provenance verified (cosign; built from %s via sm-ci)\n' "$GREEN" "$RESET" "$(fmt_step 4)" "$SOURCE_REPO"
+        sm_ok "Provenance verified (cosign; built from $SOURCE_REPO via sm-ci)"
     else
-        printf '  [%s✗%s] %s Provenance verification failed (cosign rejected the bundle)\n' "$RED" "$RESET" "$(fmt_step 4)" >&2
+        sm_fail 'Provenance verification failed (cosign rejected the bundle)' >&2
         exit 1
     fi
 elif [[ -z "$COSIGN_BIN" ]]; then
-    printf '  [%s-%s] %s Provenance check skipped (cosign not installed)\n' "$DIM" "$RESET" "$(fmt_step 4)"
+    sm_skip 'Provenance check skipped (cosign not installed)'
 else
-    printf '  [%s-%s] %s Provenance check skipped (no sigstore bundle on release)\n' "$DIM" "$RESET" "$(fmt_step 4)"
+    sm_skip 'Provenance check skipped (no sigstore bundle on release)'
 fi
 
 chmod +x "$TMPBIN"
@@ -490,7 +480,7 @@ write_receipt() {
     # ISO-8601 UTC; portable across BSD `date` (macOS) and GNU `date` (Linux).
     ts=$(date -u +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null) || ts="unknown"
     if ! mkdir -p "$dir" 2>/dev/null; then
-        printf '  [%s!%s] could not create %s — receipt skipped\n' "$DIM" "$RESET" "$dir" >&2
+        sm_note "could not create $(sm_tilde "$dir") — receipt skipped" >&2
         return 0
     fi
     if ! cat > "$file" <<EOF
@@ -504,7 +494,7 @@ installed_at = "$ts"
 installer    = "sm-install.sh"
 EOF
     then
-        printf '  [%s!%s] could not write %s — receipt skipped\n' "$DIM" "$RESET" "$file" >&2
+        sm_note "could not write $(sm_tilde "$file") — receipt skipped" >&2
     fi
 }
 
@@ -563,16 +553,25 @@ install_to_dir() {
     # defeating the reason for the layout. Other channels' legacy dirs are
     # untouched; each retires itself on its next install.
     legacy_dir="$HOME/.simplemotion/share/${PACKAGE}/sm-${CHANNEL}"
+    retired=""
     if [ -d "$legacy_dir" ]; then
         rm -rf "$legacy_dir"
         rmdir "$HOME/.simplemotion/share/${PACKAGE}" 2>/dev/null || true
-        printf '  [%s✓%s] %s Retired legacy store %s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$legacy_dir"
+        retired="$legacy_dir"
     fi
     write_receipt "$PACKAGE" "$CHANNEL" "$TAG" "$SOURCE_REPO" "$actual"
-    printf '  [%s✓%s] %s Installed %s %s to %s, linked %s/%s\n' "$GREEN" "$RESET" "$(fmt_step 5)" "$PACKAGE" "$TAG" "${store_dir}/${TAG}" "$INSTALL_DIR" "$PACKAGE"
+    # Two absolute paths on one line wrapped to column 0 and took the
+    # gutter with them for everything that followed. The destination is
+    # the step; the symlink is detail under it.
+    sm_ok "Installed $PACKAGE $TAG"
+    sm_note "store  $(sm_tilde "${store_dir}/${TAG}")"
+    sm_note "linked $(sm_tilde "${INSTALL_DIR}/${PACKAGE}")"
+    if [ -n "$retired" ]; then
+        sm_note "retired legacy store $(sm_tilde "$retired")"
+    fi
     case ":$PATH:" in
         *":$INSTALL_DIR:"*) ;;
-        *) printf '  [%s!%s] %s is not on $PATH — add it to your shell init to run %s directly\n' "$DIM" "$RESET" "$INSTALL_DIR" "$PACKAGE" ;;
+        *) sm_note "$(sm_tilde "$INSTALL_DIR") is not on \$PATH — add it to your shell init to run $PACKAGE directly" ;;
     esac
 }
 

@@ -10,7 +10,12 @@
 #   eval "$(curl -fsSL https://install.simplemotion.com/sm-install-lib.sh)"
 #
 # Functions:
-#   confirm_section          Framed section header; proceeds automatically.
+#   sm_palette, sm_banner,   The shared output format — palette, banner,
+#   sm_phase, sm_ok/warn/    phase rule, numbered step lines, continuation
+#   fail/act, sm_working,    notes, ~ abbreviation. See the block above
+#   sm_note, sm_tilde        confirm_section for the contract; the Rust
+#                            side mirrors it in src/sm_prompt.rs.
+#   confirm_section          Phase header (via sm_phase); proceeds automatically.
 #                            SM_WELCOME_CONFIRM=1 restores the Y/n gate
 #                            (SM_WELCOME_ASSUME_YES=1 overrides it back off).
 #   find_cosign              Probe ~/.local/bin/cosign and nothing else
@@ -71,21 +76,206 @@ sm_mktemp() {
     fi
 }
 
+# ── One output format for the whole toolchain ─────────────────────────
+# A single install is drawn by three programs — sm-welcome.sh, sm-install.sh
+# and the sm-welcome binary — and each used to carry its own palette, gutter
+# and rule width. Same run, three looks, handing off mid-transcript.
+#
+# This block is the contract. The Rust side mirrors it in src/sm_prompt.rs
+# (markers, counter, gutter) and src/steps/mod.rs (phase rule):
+#
+#   sm_banner   cleared screen, blank line, bold title, ═ rule sized to
+#               the title, dim provenance subtitle lines
+#   sm_phase    "\n  ── Title ─────" padded to SM_RULE_W columns total
+#   sm_ok/…     "  [G] [NN/TT] message" on an SM_GUTTER-column gutter
+#   sm_note     continuation at sm_gutter, dim, no marker — detail about
+#               the line above, never a step of its own
+#
+# The marker set is closed: ✓ green (done), * cyan (in progress), ! yellow
+# (warning), ✗ red (failed), > cyan (your turn), - dim (deliberately
+# skipped). Anything needing a seventh needs a conversation, not a new
+# escape code. `-` earns its place because a skipped provenance check is
+# genuinely neither a success nor a warning, and flattening it into either
+# is how a run stops saying what it actually did.
+
+SM_RULE_W=36        # total columns of a phase rule, title included
+SM_GUTTER_BASE=6    # columns of "  [✓] " — the gutter with no counter
+
+sm_rule() {
+    local glyph="$1" n="$2" out='' i=0
+    while (( i < n )); do out="${out}${glyph}"; i=$(( i + 1 )); done
+    printf '%s' "$out"
+}
+
+# Two separate questions, previously answered by one `[[ -t 1 ]]`:
+#
+#   sm_use_color    may we emit SGR escapes?
+#   sm_interactive  may we rewrite a line we already printed?
+#
+# They are not the same question. A log viewer that renders colour still
+# must not receive carriage returns, and NO_COLOR must strip colour without
+# turning one progress line into two. Keeping them apart is also what lets
+# tests/render-test.sh exercise both paths without allocating a pty.
+#
+# NO_COLOR is honoured per the no-color.org convention (set, any value).
+# SM_FORCE_COLOR / SM_FORCE_TTY override detection the other way, for
+# pagers that do render escapes, and for the tests.
+sm_use_color() {
+    [[ -n "${NO_COLOR:-}" ]] && return 1
+    [[ -n "${SM_FORCE_COLOR:-}" ]] && return 0
+    [[ -t 1 ]]
+}
+sm_interactive() {
+    [[ -n "${SM_FORCE_TTY:-}" ]] && return 0
+    [[ -t 1 ]]
+}
+
+# Bright green/red (92/91), plain yellow/cyan (33/96). sm-welcome.sh used
+# to set plain green 32 under a comment claiming it matched sm-install.sh's
+# 92, so the two halves of one bootstrap ticked in two different greens.
+sm_palette() {
+    if sm_use_color; then
+        C_GREEN=$'\033[92m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[91m'
+        C_CYAN=$'\033[96m';  C_DIM=$'\033[2m';     C_BOLD=$'\033[1m'
+        C_OFF=$'\033[0m'
+    else
+        C_GREEN=''; C_YELLOW=''; C_RED=''; C_CYAN=''
+        C_DIM='';   C_BOLD='';   C_OFF=''
+    fi
+    if sm_interactive; then C_ERASE=$'\r\033[K'; else C_ERASE=''; fi
+}
+sm_palette
+
+# Open the transcript. $1 = mode word ("Install" / "Update"), $2.. = dim
+# subtitle lines.
+#
+# The screen is cleared, the scrollback is NOT. `2J` + `H` blanks the
+# viewport and homes the cursor, leaving the buffer intact so whatever the
+# user was doing before this ran is still one scroll away. `clear(1)` would
+# have sent E3 as well and taken the buffer with it — a fresh view is worth
+# a clear, someone's session history is not.
+sm_banner() {
+    local mode="$1"; shift
+    local title="SimpleMotion — Development Environment ${mode}"
+    # Width is computed, not measured: ${#title} counts BYTES under LANG=C
+    # and would run the rule three columns long on the em dash. The fixed
+    # part is 39 columns ("SimpleMotion — Development Environment "), and
+    # the mode word is ASCII.
+    local width=$(( 39 + ${#mode} ))
+    if sm_interactive; then printf '\033[2J\033[H'; fi
+    printf '\n  %s%s%s\n  %s%s%s\n' \
+        "$C_BOLD" "$title" "$C_OFF" "$C_DIM" "$(sm_rule '═' "$width")" "$C_OFF"
+    local line
+    for line in "$@"; do
+        printf '  %s%s%s\n' "$C_DIM" "$line" "$C_OFF"
+    done
+}
+
+# A phase rule. Fixed total width, so consecutive phases line up their
+# right edges regardless of title length.
+sm_phase() {
+    local title="$1" pad rule=''
+    pad=$(( SM_RULE_W - ${#title} ))
+    # A title wider than the rule gets no rule and no separating space —
+    # otherwise the line ends in trailing whitespace that only shows up
+    # when someone diffs a captured transcript.
+    if (( pad > 0 )); then
+        rule=" ${C_DIM}$(sm_rule '─' "$pad")${C_OFF}"
+    fi
+    printf '\n  %s──%s %s%s%s%s\n' \
+        "$C_DIM" "$C_OFF" "$C_BOLD" "$title" "$C_OFF" "$rule"
+}
+
+# The step cursor. Seeded from the environment so sm-install.sh — which
+# runs as its own process, one per package — continues the bootstrap's
+# count instead of restarting at 1.
+STEP_N="${SM_WELCOME_STEPS_OFFSET:-0}"
+STEP_TOTAL="${SM_WELCOME_STEPS_TOTAL:-0}"
+
+# "[NN/TT] ", or nothing at all when no budget has been set. Matches the
+# Rust counter(): an unset total prints empty rather than "[03/00]", so a
+# line emitted outside any step is simply unnumbered.
+sm_counter() {
+    (( STEP_TOTAL == 0 )) && return 0
+    sm_counter_of "$STEP_N" "$STEP_TOTAL"
+}
+
+# The same bracket for a position given explicitly. The binary's step
+# listing shows one without having a run position, and renders it from the
+# equivalent helper in src/sm_prompt.rs — one spelling of the format on
+# each side rather than two per side.
+sm_counter_of() {
+    printf '%s[%02d/%02d]%s ' "$C_DIM" "$1" "$2" "$C_OFF"
+}
+
+# One numbered outcome line. Leads with ERASE so that if an sm_working
+# line is sitting unterminated on this row, this line replaces it rather
+# than stacking under it.
+sm_step() {
+    local glyph="$1" colour="$2"; shift 2
+    STEP_N=$(( STEP_N + 1 ))
+    printf '%s  [%s%s%s] %s%s\n' \
+        "$C_ERASE" "$colour" "$glyph" "$C_OFF" "$(sm_counter)" "$*"
+}
+sm_ok()   { sm_step '✓' "$C_GREEN"  "$@"; }
+sm_warn() { sm_step '!' "$C_YELLOW" "$@"; }
+sm_fail() { sm_step '✗' "$C_RED"    "$@"; }
+sm_act()  { sm_step '>' "$C_CYAN"   "$@"; }
+sm_skip() { sm_step '-' "$C_DIM"    "$@"; }
+
+# An in-progress line, carrying the number it is ABOUT to take. Does not
+# advance the cursor — the outcome line that replaces it does that, so a
+# slow step is one line in the transcript whichever way it ends.
+#
+# On a TTY it is left unterminated for sm_step's ERASE to overwrite. With
+# no TTY there is nothing to overwrite, so it terminates and stands as its
+# own record — a piped log keeps the evidence that the step was entered.
+sm_working() {
+    local nl='\n' c
+    if sm_interactive; then nl=''; fi
+    STEP_N=$(( STEP_N + 1 )); c="$(sm_counter)"; STEP_N=$(( STEP_N - 1 ))
+    printf "  [%s*%s] %s%s${nl}" "$C_CYAN" "$C_OFF" "$c" "$*"
+}
+
+# How far in the message text starts on the line above. Not a constant:
+# a line printed inside a step carries "[NN/TT] " and one printed outside a
+# step does not, so a fixed indent hangs the continuation eight columns off
+# the message it belongs to in whichever case it was not tuned for. The
+# counter's own width is derived rather than assumed, so a three-digit
+# total does not silently break the alignment.
+sm_gutter() {
+    # Measured off sm_counter's own output rather than re-derived from its
+    # format string: a hand-rolled "1 + 2 + 1 + 2 + 2" is a second copy of
+    # the format that goes stale the moment the counter changes, and it
+    # gets the mixed-width case wrong (STEP_N renders "05" while a total of
+    # 120 renders three digits). The only non-printing content is the dim
+    # pair, so subtracting it gives the true column count.
+    local c w="$SM_GUTTER_BASE"
+    c="$(sm_counter)"
+    if [[ -n "$c" ]]; then
+        w=$(( SM_GUTTER_BASE + ${#c} - ${#C_DIM} - ${#C_OFF} ))
+    fi
+    printf '%s' "$w"
+}
+
+# Continuation under the line above: dim, marker-less, indented to the
+# gutter so it sits under the MESSAGE rather than under the counter.
+sm_note() { printf '%*s%s%s%s\n' "$(sm_gutter)" '' "$C_DIM" "$*" "$C_OFF"; }
+
+# Abbreviate $HOME to ~ so a path fits the line instead of wrapping to
+# column 0 and breaking the gutter for every line after it.
+sm_tilde() {
+    # The replacement is a variable, not `\~`: a backslash-escaped tilde
+    # survives literally in bash 3.2 (macOS' /bin/bash), printing `\~/...`.
+    local t='~'
+    printf '%s' "${1/#$HOME/$t}"
+}
+
 confirm_section() {
-    local title="$1"
-    local pad
-    # Width 36, dim rule, bold title — the same formula the sm-welcome
-    # binary's phase_header uses, so a phase opened by the shell and one
-    # opened by the binary are indistinguishable in the transcript. This
-    # rule was 56 wide and uncoloured, which made the bootstrap's own
-    # phases look like a different program from the ones that follow.
-    pad=$(( 36 - ${#title} ))
-    if (( pad < 0 )); then pad=0; fi
-    local b='' d='' o=''
-    if [[ -t 1 ]]; then b=$'\033[1m'; d=$'\033[2m'; o=$'\033[0m'; fi
-    printf '\n  %s──%s %s%s%s %s' "$d" "$o" "$b" "$title" "$o" "$d"
-    printf -- '─%.0s' $(seq 1 "$pad")
-    printf '%s\n' "$o"
+    # The rule itself is sm_phase's, so a phase opened by the shell and one
+    # opened by the binary are the same object drawn by one formula rather
+    # than two copies of it that drifted apart.
+    sm_phase "$1"
     # Auto-proceed by default — the section gates made a fresh onboarding
     # three extra Enter presses for no decision the user could make
     # (matches sm-welcome v0.1.10 dropping its per-step Proceed gate).
@@ -106,10 +296,11 @@ confirm_section() {
     resp="$(printf '%s' "$resp" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
     case "$resp" in
         ''|y|yes) return 0 ;;
-        *) printf '  [!] Aborted by user.\n' >&2; exit 1 ;;
+        *) sm_warn 'Aborted by user.' >&2; exit 1 ;;
     esac
 }
 
+# shellcheck disable=SC2034  # COSIGN_BIN is this function's OUTPUT, read by callers
 find_cosign() {
     COSIGN_BIN=""
     if [[ -x "$HOME/.local/bin/cosign" ]]; then
@@ -118,6 +309,7 @@ find_cosign() {
     return 1
 }
 
+# shellcheck disable=SC2034  # COSIGN_BIN is this function's OUTPUT, read by callers
 ensure_cosign() {
     COSIGN_BIN=""
     local cosign_dir="$HOME/.local/bin"
@@ -198,6 +390,7 @@ initialize_cosign_tuf() {
     return 1
 }
 
+# shellcheck disable=SC2034  # PWSH_BIN is this function's OUTPUT, read by callers
 find_pwsh() {
     PWSH_BIN=""
     if [[ -x "$HOME/.local/bin/pwsh-7/pwsh" ]]; then
@@ -213,6 +406,7 @@ find_pwsh() {
 # no Homebrew/apt/sudo. pwsh is the shell the M365 / Exchange Online admin
 # scripts (sm-set-*.ps1) target; the SimpleMotion toolchain prefers pwsh 7
 # over the in-box shells. Best-effort: degrades to a notice on any failure.
+# shellcheck disable=SC2034  # PWSH_BIN is this function's OUTPUT, read by callers
 ensure_pwsh() {
     PWSH_BIN=""
     local pwsh_dir="$HOME/.local/bin/pwsh-7"
