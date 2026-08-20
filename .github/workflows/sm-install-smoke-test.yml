@@ -43,6 +43,20 @@ env:
   # Authenticate the installer's api.github.com calls so shared-runner IPs
   # don't hit the 60/hr unauthenticated rate limit (the macOS flake).
   GH_TOKEN: ${{ github.token }}
+  # Source the library from THIS CHECKOUT, not from production.
+  #
+  # This job runs the repo's `sm-install.sh`, but that script fetches
+  # `sm-install-lib.sh` over the network, so it was running the checked-out
+  # script against whatever the live site happened to be serving. Any commit
+  # changing both files therefore tested a mismatched pair, and on a merge it
+  # RACED the Pages deploy: #84 failed with `sm_phase: command not found`
+  # because the smoke test started at 03:49:44 and sm-pages did not finish
+  # until 03:50:11. Production itself was consistent the whole time.
+  #
+  # Testing the checkout against the checkout is what this job was always
+  # for. What it does NOT cover is the deployed pair — the scheduled Monday
+  # run does that, because by then main and the site agree.
+  SM_INSTALL_BASE: file://${{ github.workspace }}
 
 jobs:
   unix:
