@@ -67,12 +67,16 @@ gh_api() {
 # Sigstore trust under ~/.sigstore. Exported so sm-install.sh picks it up.
 export TUF_ROOT="${TUF_ROOT:-$HOME/.simplemotion/sigstore}"
 
-printf '\n  SimpleMotion — Development Environment Onboarding\n  ══════════════════════════════════════════════════\n'
+# Where the bootstrap fetches its siblings from. Overridable so a branch can
+# be exercised end-to-end before it is deployed — `SM_INSTALL_BASE=file://$PWD`
+# runs the working tree, which is what tests/render-test.sh does. Defaults to
+# production, so every documented one-liner is unaffected.
+SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.com}"
 
 # Source the shared install-toolchain library. Brings in confirm_section,
 # find_cosign, ensure_cosign, initialize_cosign_tuf. sm-install.sh loads
 # the same lib when it runs in Section 2.
-eval "$(curl -fsSL https://install.simplemotion.com/sm-install-lib.sh)"
+eval "$(curl -fsSL "${SM_INSTALL_BASE}/sm-install-lib.sh")"
 
 # Route tempfiles under ~/SimpleMotion/.tmpdir so curl-to-mktemp writes
 # don't hit the macOS /var/folders/.../T/ failure modes (EDR scans,
@@ -101,38 +105,20 @@ export SM_WELCOME_NO_BANNER=1
 # invocation, which always prints five numbered steps.
 PREREQ_STEPS=3
 DL_STEPS=5
+# CROSS-REPO CONSTANT. The truth lives in 3400-0009-SM-Welcome's step
+# registry, and test_workflow_manifest_parses there pins it and names this
+# line when it changes. If you are here because that test failed, this is
+# the number it wants.
 case "$(uname -s)" in
     Darwin) BIN_STEPS=19 ;;   # includes the macOS-only touchid step
     *)      BIN_STEPS=18 ;;   # Linux omits it
 esac
 
-# Colours, matching sm-install.sh so the two halves of the bootstrap render
-# as one workflow rather than two programs.
-if [[ -t 1 ]]; then
-    C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[31m'
-    C_CYAN=$'\033[96m';  C_DIM=$'\033[2m';     C_OFF=$'\033[0m'
-else
-    C_GREEN=''; C_YELLOW=''; C_RED=''; C_CYAN=''; C_DIM=''; C_OFF=''
-fi
-
-# Global step cursor. sm_step prints one numbered line and advances it;
-# sm_note prints an unnumbered continuation under the line above.
-STEP_N=0
-STEP_TOTAL=0
-sm_step() {
-    # $1 = marker glyph, $2 = colour, $3.. = message
-    local glyph="$1" colour="$2"; shift 2
-    STEP_N=$(( STEP_N + 1 ))
-    printf '  [%s%s%s] %s[%02d/%02d]%s %s\n' \
-        "$colour" "$glyph" "$C_OFF" "$C_DIM" "$STEP_N" "$STEP_TOTAL" "$C_OFF" "$*"
-}
-sm_ok()   { sm_step '✓' "$C_GREEN"  "$@"; }
-sm_work() { sm_step '*' "$C_CYAN"   "$@"; }
-sm_warn() { sm_step '!' "$C_YELLOW" "$@"; }
-sm_fail() { sm_step '✗' "$C_RED"    "$@"; }
-# Continuation under the previous line — indented to the width of
-# "  [x] [NN/NN] " so it reads as detail, not as another step.
-sm_note() { printf '         %s%s%s\n' "$C_DIM" "$*" "$C_OFF"; }
+# The palette, banner, phase rule and step renderer all come from
+# sm-install-lib.sh, sourced above and by sm-install.sh in its own process.
+# They used to be defined here as well, in a second copy that had already
+# drifted — a different green, and a continuation indent five columns
+# short of the gutter it claimed to match.
 
 # Pre-parse our own flags: --channel goes to sm-install.sh; everything
 # else forwards to the sm-welcome binary. SM_CHANNEL env var also
@@ -160,8 +146,33 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# The binary only spends steps when it is going to RUN them. `update`
+# reaches us as `bash -s -- list`, which prints the step table and exits —
+# so budgeting for 19 unrun steps left the counter stopping dead at 13/32
+# and the transcript looking truncated. Any verb that does not run the
+# workflow contributes zero.
+case "${BIN_ARGS[0]:-run}" in
+    list|status|steps|--version|-V|--help|-h) BIN_STEPS=0 ;;
+esac
+
 INSTALL_DIR="${SM_INSTALL_DIR:-$HOME/.simplemotion/bin}"
 LOCAL_BIN="${INSTALL_DIR}/sm-welcome"
+
+# ── Open the transcript ───────────────────────────────────────────────
+# Mode word and channel provenance come from `sm-welcome update` when it
+# spawned us (it knows which install receipt it read); a bare curl|bash has
+# neither, and says so.
+SM_MODE="${SM_WELCOME_MODE:-Install}"
+if [[ -n "${SM_WELCOME_CHANNEL_SOURCE:-}" ]]; then
+    SM_CHANNEL_SOURCE="$SM_WELCOME_CHANNEL_SOURCE"
+elif [[ ${#CHANNEL_ARG[@]} -gt 0 ]]; then
+    SM_CHANNEL_SOURCE="--channel override"
+elif [[ -n "${SM_CHANNEL:-}" ]]; then
+    SM_CHANNEL_SOURCE="SM_CHANNEL environment"
+else
+    SM_CHANNEL_SOURCE="default"
+fi
+sm_banner "$SM_MODE" "channel=${CHANNEL_VAL} · ${SM_CHANNEL_SOURCE}"
 
 # Optional clean wipe. --clean (or SM_WELCOME_CLEAN=1) deletes the
 # SimpleMotion-owned bootstrap locations on disk so Section 1 rebuilds
@@ -169,7 +180,7 @@ LOCAL_BIN="${INSTALL_DIR}/sm-welcome"
 # ~/.local wholesale) because that dir is the XDG user-install root on
 # Unix and likely contains unrelated packages (pip --user, cargo, etc.).
 if [[ $CLEAN -eq 1 ]]; then
-    printf '\n  [!] --clean set — wiping prior bootstrap state\n'
+    sm_warn '--clean set — wiping prior bootstrap state'
     for p in \
         "$HOME/.local/bin/cosign" \
         "$HOME/.local/bin/pwsh-7" \
@@ -179,7 +190,7 @@ if [[ $CLEAN -eq 1 ]]; then
         "$HOME/.sm-welcome.toml"; do
         if [[ -e "$p" ]]; then
             rm -rf "$p"
-            printf '      removed %s\n' "$p"
+            sm_note "removed $(sm_tilde "$p")"
         fi
     done
 fi
@@ -196,7 +207,6 @@ detect_state() {
 }
 GIT_STATE=$(detect_state git)
 CURL_STATE=$(detect_state curl)
-BASH_STATE=$(detect_state bash)
 # cosign is a SimpleMotion-managed tool — we deliberately ignore any
 # system-wide cosign (Homebrew / apt / dnf) and use only the one we
 # install ourselves at ~/.local/bin/cosign.
@@ -217,14 +227,12 @@ fi
 # Hard-stop only if curl is missing — without it we can't fetch anything,
 # including the version probe immediately below.
 if [[ "$CURL_STATE" == "missing" ]]; then
-    printf '  [%s✗%s] curl is required to continue. Install it via your package manager.\n' \
-        "$C_RED" "$C_OFF" >&2
+    sm_fail 'curl is required to continue. Install it via your package manager.' >&2
     exit 1
 fi
 
 SKIP_DOWNLOAD=0
 LOCAL_VER=""
-LATEST_VER=""
 case "$CHANNEL_VAL" in
     release|preview|develop|testing) CHANNEL_REPO="simplemotion/sm-${CHANNEL_VAL}"; STORE_CHANNEL="$CHANNEL_VAL" ;;
     # 'private' is deliberately absent. It was a legacy alias for develop until
@@ -270,8 +278,13 @@ if [[ $SKIP_DOWNLOAD -eq 0 || ! -x "${INSTALL_DIR}/sm-onboard" ]]; then
     NEED_ONBOARD=1
 fi
 
-DOWNLOAD_PASSES=$(( (SKIP_DOWNLOAD == 0 ? 1 : 0) + NEED_ONBOARD ))
-STEP_TOTAL=$(( PREREQ_STEPS + DOWNLOAD_PASSES * DL_STEPS + BIN_STEPS ))
+# Each package costs DL_STEPS if it is fetched and one line if it is not —
+# "already at the latest" is still something the run DID, and reporting it
+# as a numbered skip keeps the phase from rendering as a header with a
+# dangling note under it.
+welcome_cost=$(( SKIP_DOWNLOAD == 0 ? DL_STEPS : 1 ))
+onboard_cost=$(( NEED_ONBOARD == 1 ? DL_STEPS : 1 ))
+STEP_TOTAL=$(( PREREQ_STEPS + welcome_cost + onboard_cost + BIN_STEPS ))
 
 confirm_section "Prerequisites"
 # git is not installed here — the binary's preflight reports it — so this is
@@ -286,37 +299,34 @@ fi
 # counter contiguous — a phase whose step count depends on the outcome
 # cannot be numbered against a total computed up front.
 if [[ "$PWSH_STATE" == "missing" ]]; then
-    printf '  [%s*%s] %s[%02d/%02d]%s Installing PowerShell 7 (PowerShell/PowerShell latest, SHA256-verified)...\n' \
-        "$C_CYAN" "$C_OFF" "$C_DIM" "$(( STEP_N + 1 ))" "$STEP_TOTAL" "$C_OFF"
+    sm_working 'Installing PowerShell 7 (PowerShell/PowerShell latest, SHA256-verified)...'
     if ensure_pwsh; then
-        sm_ok "PowerShell 7 installed: $PWSH_BIN"
+        sm_ok "PowerShell 7 installed: $(sm_tilde "$PWSH_BIN")"
     else
         sm_warn "PowerShell 7 install failed"
         sm_note "The M365/Exchange admin scripts (sm-set-*.ps1) will need pwsh installed manually."
     fi
 else
-    sm_ok "PowerShell 7 present: $HOME/.local/bin/pwsh-7/pwsh"
+    sm_ok "PowerShell 7 present: $(sm_tilde "$HOME/.local/bin/pwsh-7/pwsh")"
 fi
 
 if [[ "$COSIGN_STATE" == "missing" ]]; then
-    printf '  [%s*%s] %s[%02d/%02d]%s Installing cosign (sigstore/cosign latest, SHA256-verified)...\n' \
-        "$C_CYAN" "$C_OFF" "$C_DIM" "$(( STEP_N + 1 ))" "$STEP_TOTAL" "$C_OFF"
+    sm_working 'Installing cosign (sigstore/cosign latest, SHA256-verified)...'
     if ensure_cosign; then
-        sm_ok "cosign installed: $COSIGN_BIN"
+        sm_ok "cosign installed: $(sm_tilde "$COSIGN_BIN")"
     else
         sm_warn "cosign install failed"
         sm_note "Attestation verification will be skipped; SHA256 still anchors integrity."
     fi
 else
     COSIGN_BIN="$HOME/.local/bin/cosign"
-    sm_ok "cosign present: $COSIGN_BIN"
+    sm_ok "cosign present: $(sm_tilde "$COSIGN_BIN")"
 fi
 
 if [[ -n "${COSIGN_BIN:-}" ]]; then
-    printf '  [%s*%s] %s[%02d/%02d]%s Initializing cosign TUF trust (tuf-repo.github.com)...\n' \
-        "$C_CYAN" "$C_OFF" "$C_DIM" "$(( STEP_N + 1 ))" "$STEP_TOTAL" "$C_OFF"
+    sm_working 'Initializing cosign TUF trust (tuf-repo.github.com)...'
     if initialize_cosign_tuf "$COSIGN_BIN"; then
-        sm_ok "cosign TUF initialized in $TUF_ROOT"
+        sm_ok "cosign TUF initialized in $(sm_tilde "$TUF_ROOT")"
     else
         sm_warn "cosign TUF init failed"
         sm_note "Attestation verification will be skipped; SHA256 still anchors integrity."
@@ -346,20 +356,19 @@ if [[ $SKIP_DOWNLOAD -eq 0 ]]; then
     # Without it both passes printed [01..05] and the binary then resumed
     # from a number neither of them had reached.
     export SM_WELCOME_STEPS_OFFSET="$STEP_N"
-    INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")
+    INSTALL_SH=$(curl -fsSL "${SM_INSTALL_BASE}/sm-install.sh")
     if ! bash -c "$INSTALL_SH" sm-install \
         --package sm-welcome \
         --asset-suffix short \
         --source-repo 3400-0000-SM-Software/3400-0009-SM-Welcome \
         --mode install \
         ${CHANNEL_ARG[@]+"${CHANNEL_ARG[@]}"}; then
-        printf '\n  [%s✗%s] sm-welcome could not be installed from the %s channel (see the message above).\n\n' \
-            "$C_RED" "$C_OFF" "${CHANNEL_VAL}" >&2
+        sm_fail "sm-welcome could not be installed from the ${CHANNEL_VAL} channel (see above)." >&2
         exit 1
     fi
     STEP_N=$(( STEP_N + DL_STEPS ))
 else
-    sm_note "sm-welcome is already at this channel's latest ($LOCAL_VER) — download skipped."
+    sm_skip "sm-welcome already at $LOCAL_VER on this channel — download skipped"
 fi
 
 # ── sm-onboard ────────────────────────────────────────────────────────
@@ -383,27 +392,34 @@ fi
 # A workstation without sm-onboard is fully functional — only admins invoke it.
 if [[ $NEED_ONBOARD -eq 1 ]]; then
     export SM_WELCOME_STEPS_OFFSET="$STEP_N"
-    : "${INSTALL_SH:=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")}"
+    : "${INSTALL_SH:=$(curl -fsSL "${SM_INSTALL_BASE}/sm-install.sh")}"
     if ! bash -c "$INSTALL_SH" sm-install \
         --package sm-onboard \
         --asset-suffix short \
         --source-repo 3400-0000-SM-Software/3400-0009-SM-Welcome \
         --mode install \
         ${CHANNEL_ARG[@]+"${CHANNEL_ARG[@]}"}; then
-        printf '\n  [%s!%s] sm-onboard was not installed from the %s channel — continuing.\n' \
-            "$C_YELLOW" "$C_OFF" "${CHANNEL_VAL}" >&2
-        printf '         Expected if this release predates simplemotion/sm-ci#28, which is what\n' >&2
-        printf '         first built workspace members. Admins can re-run this installer after the\n' >&2
-        printf '         next release on that channel; everyone else does not need it.\n\n' >&2
+        sm_warn "sm-onboard was not installed from the ${CHANNEL_VAL} channel — continuing." >&2
+        sm_note 'Expected if this release predates simplemotion/sm-ci#28, which is what' >&2
+        sm_note 'first built workspace members. Admins can re-run this installer after' >&2
+        sm_note 'the next release on that channel; everyone else does not need it.' >&2
     fi
     STEP_N=$(( STEP_N + DL_STEPS ))
+else
+    # Budgeted at one line, and here it is. A phase that decided to do
+    # nothing should say so on the record rather than leave a gap the
+    # reader has to interpret.
+    sm_skip 'sm-onboard already present — download skipped'
 fi
 
 # ── Section 3: Launch ─────────────────────────────────────────────────
 # The binary picks the count up from here and runs it out to STEP_TOTAL.
 export SM_WELCOME_STEPS_OFFSET="$STEP_N"
 
-confirm_section "Setup"
+# No phase header here. There used to be one titled "Setup", and it was
+# empty on every run: the next thing to touch the terminal is the binary,
+# which opens its own phase before its first step. A rule with nothing
+# under it is not a section, it is a gap with a title.
 
 exec_local() {
     if (: </dev/tty) 2>/dev/null; then

@@ -29,6 +29,9 @@ const SKIP = new Set([
   'package-lock.json',
   'tsconfig.json',
   'sm-build.ts',
+  // Renderer tests and the transcript preview. Dev sources — they exercise
+  // sm-install-lib.sh, they are not served from it.
+  'tests',
 ]);
 
 // 1. Assemble the served tree.
