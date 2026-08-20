@@ -78,8 +78,13 @@ if [[ "$MODE" == update ]]; then
     done
     printf '\n'
     STEP_TOTAL=0
-    sm_ok "sm-welcome updated: v0.1.1-develop-019 → $TAG"
-    sm_note 'sm-onboard updated to the same release'
+    # Exactly what cmd_update prints: the destination on the marker line,
+    # the origin as detail under it. It said `updated: X → Y` here, which the
+    # binary stopped saying, and it claimed a line about sm-onboard that
+    # cmd_update has never printed at all. A preview that invents output is
+    # worse than no preview, because it gets reviewed and believed.
+    sm_ok "sm-welcome updated to $TAG"
+    sm_note 'from v0.1.1-develop-019'
 else
     sm_phase 'Install'
     sm_working 'Installing GitHub CLI to ~/.local/bin...'
