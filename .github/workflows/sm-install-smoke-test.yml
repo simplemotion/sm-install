@@ -31,6 +31,8 @@ on:
     paths:
       - 'sm-install.sh'
       - 'sm-install-lib.sh'
+      - 'sm-install.ps1'
+      - 'sm-install-lib.ps1'
       - '.github/workflows/sm-install-smoke-test.yml'
 
 permissions:
@@ -59,6 +61,56 @@ env:
   SM_INSTALL_BASE: file://${{ github.workspace }}
 
 jobs:
+  windows:
+    name: Install + verify (pwsh)
+    runs-on: windows-latest
+    # The Bash side wants a file:// URL because curl reads it; PowerShell wants
+    # a plain directory path, because Get-SmSibling falls back to Get-Content
+    # for anything that is not http(s). Same intent, two spellings.
+    env:
+      SM_INSTALL_BASE: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Windows binaries returned on 2026-08-21 (3400-0009-SM-Welcome#235), but
+      # a GA is a PROMOTION of an earlier build, so `release` keeps shipping
+      # whatever it was promoted from until the next one. Asserting against an
+      # asset the channel does not carry yet would just be a red tick that
+      # tells you nothing, so this probes first and says which case it is.
+      #
+      # The skip is deliberately loud. A job that quietly passes while testing
+      # nothing is the exact shape this repo keeps getting caught by.
+      - name: Does the channel carry a Windows asset yet?
+        id: probe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $asset = "$env:PKG-win-x64.exe"
+          $repo  = "simplemotion/sm-$env:CH"
+          $names = @(gh release view --repo $repo --json assets --jq '.assets[].name')
+          if ($names -contains $asset) {
+            "present=true" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+            Write-Host "$asset is published on $env:CH - asserting for real."
+          } else {
+            "present=false" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+            Write-Host "::notice::SKIPPED, not passed: $repo carries no $asset. Windows triples were restored on 2026-08-21 and the develop channel has the assets, but a GA is a promotion of an earlier build so release will not carry them until the next promote. This job starts asserting on its own from that point with no change here."
+          }
+
+      - name: Install + verify (pwsh)
+        if: steps.probe.outputs.present == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $log = & ./sm-install.ps1 -Package $env:PKG -AssetSuffix short `
+                   -SourceRepo $env:SRC -Channel $env:CH -Mode install 2>&1 | Out-String
+          Write-Host $log
+          if ($LASTEXITCODE -ne 0) { throw "sm-install.ps1 exited $LASTEXITCODE" }
+          if ($log -notmatch 'Provenance verified') { throw 'provenance NOT verified' }
+          $exe = Join-Path $HOME ".simplemotion\bin\$env:PKG.exe"
+          if (-not (Test-Path $exe)) { throw "$exe is missing after install" }
+          & $exe -V
+          if ($LASTEXITCODE -ne 0) { throw "$exe -V exited $LASTEXITCODE" }
+
   unix:
     strategy:
       fail-fast: false

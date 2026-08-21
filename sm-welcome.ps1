@@ -52,12 +52,30 @@ $ErrorActionPreference = 'Stop'
 # Remove-TreeForcefully, Find-Cosign, Install-Cosign, Initialize-CosignTuf.
 # sm-install.ps1 loads the same lib when it runs in Section 2. Loaded before
 # the PowerShell-7 guard below so the guard itself can live in the shared lib.
-$smInstallLib = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install-lib.ps1')
+# Where this script fetches its siblings from. Overridable so a branch can be
+# exercised end to end before it is deployed. Mirrors SM_INSTALL_BASE on the
+# Bash side, added in sm-install#86 after a merge raced its own Pages deploy and
+# tested a new script against the previously-deployed library. Defaults to
+# production, so every documented one-liner is unaffected.
+$SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { 'https://install.simplemotion.com' }
+
+# Read a sibling script from the base. A base that does not look like a URL is
+# treated as a directory, which is what CI uses so the checked-out script and
+# the checked-out library are tested as the pair they will ship as.
+function Get-SmSibling {
+    param([Parameter(Mandatory)][string]$Name)
+    if ($SmInstallBase -match '^https?://') {
+        return (New-Object Net.WebClient).DownloadString("$SmInstallBase/$Name")
+    }
+    return (Get-Content -Raw -LiteralPath (Join-Path $SmInstallBase $Name))
+}
+
+$smInstallLib = Get-SmSibling 'sm-install-lib.ps1'
 Invoke-Expression $smInstallLib
 
 # On Windows PowerShell 5.1, relaunches this script under pwsh 7 (installing
 # a portable copy into ~/.local/bin if absent) and exits. No-op on pwsh 6+.
-Invoke-Pwsh7Guard -ScriptUrl 'https://install.simplemotion.com/sm-welcome.ps1'
+Invoke-Pwsh7Guard -ScriptUrl "$SmInstallBase/sm-welcome.ps1"
 
 Write-Host ""
 Write-Host "  SimpleMotion - Development Environment Onboarding"
@@ -314,7 +332,7 @@ if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and $storeBin -and (Test-Path $storeBin
 Confirm-Section 'Section 2 of 3: sm-welcome'
 
 if (-not $skipDownload) {
-    $installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1')
+    $installer = Get-SmSibling 'sm-install.ps1'
     $sb = [ScriptBlock]::Create($installer)
     & $sb -Package 'sm-welcome' `
           -AssetSuffix 'short' `
@@ -352,7 +370,7 @@ if (-not $skipDownload) {
 $onboardBin = Join-Path $installDir 'sm-onboard.exe'
 if ((-not $skipDownload) -or (-not (Test-Path $onboardBin))) {
     if (-not $sb) {
-        $installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1')
+        $installer = Get-SmSibling 'sm-install.ps1'
         $sb = [ScriptBlock]::Create($installer)
     }
     & $sb -Package 'sm-onboard' `

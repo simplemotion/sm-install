@@ -81,13 +81,31 @@ $ErrorActionPreference = 'Stop'
 # sm-welcome.ps1 loads the same lib at startup, so functions are consistent
 # across the bootstrap and standalone-install code paths. Loaded before the
 # PowerShell-7 guard below so the guard itself can live in the shared lib.
-$smInstallLib = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install-lib.ps1')
+# Where this script fetches its siblings from. Overridable so a branch can be
+# exercised end to end before it is deployed. Mirrors SM_INSTALL_BASE on the
+# Bash side, added in sm-install#86 after a merge raced its own Pages deploy and
+# tested a new script against the previously-deployed library. Defaults to
+# production, so every documented one-liner is unaffected.
+$SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { 'https://install.simplemotion.com' }
+
+# Read a sibling script from the base. A base that does not look like a URL is
+# treated as a directory, which is what CI uses so the checked-out script and
+# the checked-out library are tested as the pair they will ship as.
+function Get-SmSibling {
+    param([Parameter(Mandatory)][string]$Name)
+    if ($SmInstallBase -match '^https?://') {
+        return (New-Object Net.WebClient).DownloadString("$SmInstallBase/$Name")
+    }
+    return (Get-Content -Raw -LiteralPath (Join-Path $SmInstallBase $Name))
+}
+
+$smInstallLib = Get-SmSibling 'sm-install-lib.ps1'
 Invoke-Expression $smInstallLib
 
 # On Windows PowerShell 5.1, relaunches THIS script under pwsh 7 (installing
 # a portable copy into ~/.local/bin if absent), forwarding the same
 # parameters, and exits. No-op on pwsh 6+.
-Invoke-Pwsh7Guard -ScriptUrl 'https://install.simplemotion.com/sm-install.ps1' -ScriptPath $PSCommandPath -BoundParameters $PSBoundParameters
+Invoke-Pwsh7Guard -ScriptUrl "$SmInstallBase/sm-install.ps1" -ScriptPath $PSCommandPath -BoundParameters $PSBoundParameters
 
 # Surface SimpleMotion bins on `Get-Command` for the *first* run, before
 # any profile-script PATH edit has taken effect in a new PowerShell
