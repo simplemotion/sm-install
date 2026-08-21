@@ -82,6 +82,18 @@ jobs:
           bash tests/render-preview.sh update  > /dev/null
           bash tests/render-preview.sh install > /dev/null
 
+      - name: Renderer parity (bash vs PowerShell)
+        # The format has two implementations and neither is the authority.
+        # This renders the same cases through both and fails on any byte of
+        # difference. It caught nothing on introduction because the port was
+        # written against it — but it is what stops the next one-sided change
+        # walking off, which is exactly what happened when #82 moved the shell
+        # rule to width 36 and left PowerShell on 56 for two days.
+        #
+        # pwsh ships on ubuntu-latest, so this needs no Windows runner: the
+        # renderer is string formatting, and string formatting travels.
+        run: bash tests/render-parity.sh
+
       - name: ShellCheck
         # SC2218 is excluded, not fixed: it fires on sm_mktemp, write_receipt
         # and sm_interactive, all of which are defined ABOVE their call sites

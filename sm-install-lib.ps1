@@ -117,9 +117,151 @@ function Invoke-Pwsh7Guard {
     exit $LASTEXITCODE
 }
 
+# ── One output format for the whole toolchain (PowerShell side) ────────
+# The Bash twin of every function below lives in sm-install-lib.sh, and
+# tests/render-parity.sh renders the same cases through both and fails on
+# any byte of difference. That test is the contract; this is one of its two
+# implementations, and neither is allowed to be the authority.
+#
+# It exists because the two sides HAD diverged and nothing noticed:
+# Confirm-Section drew `-- Title ---` on a width-56 formula in ASCII while
+# sm_phase drew `── Title ───` on width 36 in box-drawing. 62 columns
+# against 42, for two days, in the same product.
+#
+# Everything writes through Write-SmRaw so newlines are exactly LF, the
+# same bytes printf emits. Write-Host would go to the information stream
+# and PowerShell's own newline handling would put CRLF on Windows, which is
+# a difference the parity test would (correctly) reject.
+
+$SmRuleW      = 36   # total columns of a phase rule, title included
+$SmGutterBase = 6    # columns of "  [✓] " — the gutter with no counter
+
+function Write-SmRaw([string]$Text) { [Console]::Out.Write($Text) }
+
+function Get-SmRule([string]$Glyph, [int]$Count) {
+    if ($Count -le 0) { return '' }
+    return ($Glyph * $Count)
+}
+
+# Colour and cursor control are separate questions, as on the Bash side.
+# NO_COLOR is honoured per no-color.org; SM_FORCE_COLOR / SM_FORCE_TTY
+# override detection for pagers that do render escapes, and for the tests.
+function Test-SmUseColor {
+    if ($env:NO_COLOR)       { return $false }
+    if ($env:SM_FORCE_COLOR) { return $true }
+    return [Console]::IsOutputRedirected -eq $false
+}
+function Test-SmInteractive {
+    if ($env:SM_FORCE_TTY) { return $true }
+    return [Console]::IsOutputRedirected -eq $false
+}
+
+function Initialize-SmPalette {
+    $e = [char]27
+    if (Test-SmUseColor) {
+        $script:C_GREEN = "$e[92m"; $script:C_YELLOW = "$e[33m"; $script:C_RED = "$e[91m"
+        $script:C_CYAN  = "$e[96m"; $script:C_DIM    = "$e[2m";  $script:C_BOLD = "$e[1m"
+        $script:C_OFF   = "$e[0m"
+    } else {
+        $script:C_GREEN = ''; $script:C_YELLOW = ''; $script:C_RED = ''
+        $script:C_CYAN  = ''; $script:C_DIM = ''; $script:C_BOLD = ''; $script:C_OFF = ''
+    }
+    if (Test-SmInteractive) { $script:C_ERASE = "`r$e[K" } else { $script:C_ERASE = '' }
+    # Box-drawing and ═ are mangled by the legacy console codepage, so the
+    # encoding is set here rather than left to whatever the host inherited.
+    try { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch { }
+}
+Initialize-SmPalette
+
+# Open the transcript. Screen only: 2J + H blanks the viewport and homes the
+# cursor, leaving the scrollback intact.
+function Write-SmBanner {
+    param([Parameter(Mandatory)][string]$Mode, [string[]]$Subtitle = @())
+    $title = "SimpleMotion — Development Environment $Mode"
+    # Width is computed, not measured — 39 columns of fixed text plus an
+    # ASCII mode word — so it cannot drift with how a runtime counts the
+    # em dash. Same constant, same reason, as the Bash side.
+    $width = 39 + $Mode.Length
+    if (Test-SmInteractive) { Write-SmRaw "$([char]27)[2J$([char]27)[H" }
+    Write-SmRaw "`n  $($script:C_BOLD)$title$($script:C_OFF)`n"
+    Write-SmRaw "  $($script:C_DIM)$(Get-SmRule '═' $width)$($script:C_OFF)`n"
+    foreach ($line in $Subtitle) {
+        Write-SmRaw "  $($script:C_DIM)$line$($script:C_OFF)`n"
+    }
+}
+
+function Write-SmPhase([string]$Title) {
+    $pad  = $SmRuleW - $Title.Length
+    $rule = ''
+    if ($pad -gt 0) { $rule = " $($script:C_DIM)$(Get-SmRule '─' $pad)$($script:C_OFF)" }
+    Write-SmRaw "`n  $($script:C_DIM)──$($script:C_OFF) $($script:C_BOLD)$Title$($script:C_OFF)$rule`n"
+}
+
+# The step cursor, seeded from the environment so a nested invocation
+# continues the caller's count instead of restarting at 1.
+$script:SmStepN     = if ($env:SM_WELCOME_STEPS_OFFSET) { [int]$env:SM_WELCOME_STEPS_OFFSET } else { 0 }
+$script:SmStepTotal = if ($env:SM_WELCOME_STEPS_TOTAL)  { [int]$env:SM_WELCOME_STEPS_TOTAL }  else { 0 }
+
+function Set-SmStepPosition([int]$N, [int]$Total) {
+    $script:SmStepN = $N; $script:SmStepTotal = $Total
+}
+
+function Get-SmCounterOf([int]$N, [int]$Total) {
+    return ('{0}[{1:d2}/{2:d2}]{3} ' -f $script:C_DIM, $N, $Total, $script:C_OFF)
+}
+function Get-SmCounter {
+    if ($script:SmStepTotal -eq 0) { return '' }
+    return (Get-SmCounterOf $script:SmStepN $script:SmStepTotal)
+}
+
+# Measured off the counter's own output rather than re-derived from its
+# format, so a wider total cannot silently break the alignment.
+function Get-SmGutter {
+    $c = Get-SmCounter
+    if (-not $c) { return $SmGutterBase }
+    return $SmGutterBase + $c.Length - $script:C_DIM.Length - $script:C_OFF.Length
+}
+
+function Write-SmStep([string]$Glyph, [string]$Colour, [string]$Message) {
+    $script:SmStepN++
+    Write-SmRaw "$($script:C_ERASE)  [$Colour$Glyph$($script:C_OFF)] $(Get-SmCounter)$Message`n"
+}
+function Write-SmOk    ([string]$Message) { Write-SmStep '✓' $script:C_GREEN  $Message }
+function Write-SmWarn  ([string]$Message) { Write-SmStep '!' $script:C_YELLOW $Message }
+function Write-SmFail  ([string]$Message) { Write-SmStep '✗' $script:C_RED    $Message }
+function Write-SmAct   ([string]$Message) { Write-SmStep '>' $script:C_CYAN   $Message }
+function Write-SmSkip  ([string]$Message) { Write-SmStep '-' $script:C_DIM    $Message }
+
+# An in-progress line carrying the number it is ABOUT to take. Does not
+# advance the cursor — the outcome line that replaces it does that.
+function Write-SmWorking([string]$Message) {
+    $script:SmStepN++
+    $c = Get-SmCounter
+    $script:SmStepN--
+    $nl = if (Test-SmInteractive) { '' } else { "`n" }
+    Write-SmRaw "  [$($script:C_CYAN)*$($script:C_OFF)] $c$Message$nl"
+}
+
+function Write-SmNote([string]$Message) {
+    Write-SmRaw "$(' ' * (Get-SmGutter))$($script:C_DIM)$Message$($script:C_OFF)`n"
+}
+
+# Abbreviate the home directory so a path fits the line instead of wrapping
+# to column 0 and taking the gutter with it.
+function Get-SmTilde([string]$Path) {
+    # $env:HOME first, because that is what the Bash side reads and the
+    # parity test overrides it. UserProfile is the Windows fallback, where
+    # HOME is usually unset.
+    $home_ = if ($env:HOME) { $env:HOME } else { [Environment]::GetFolderPath('UserProfile') }
+    if ($home_ -and $Path.StartsWith($home_)) { return '~' + $Path.Substring($home_.Length) }
+    return $Path
+}
+
 function Confirm-Section($title) {
-    Write-Host ""
-    Write-Host ("  -- {0} {1}" -f $title, ('-' * [Math]::Max(0, 56 - $title.Length)))
+    # The rule is Write-SmPhase's, so a phase opened here and one opened by
+    # the Bash side are the same object drawn by one formula. This function
+    # used to draw its own, and drew a different one.
+    Write-SmPhase $title
     # Auto-proceed by default — matches sm-welcome v0.1.10 dropping its
     # per-step Proceed gate. SM_WELCOME_CONFIRM=1 restores the prompt;
     # SM_WELCOME_ASSUME_YES=1 (the old non-interactive override) still
