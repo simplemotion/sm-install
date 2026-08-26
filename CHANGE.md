@@ -130,10 +130,10 @@ v0.1.2-develop-001     develop   next dev cycle
 
 Both are valid per SemVer 2.0.0, but they differ in precedence semantics:
 
-| Slot | Sorts? | Example |
-|---|---|---|
-| Pre-release (`-`) | Yes — affects comparison | `0.1.1-preview-001` < `0.1.1` |
-| Build metadata (`+`) | No — ignored by comparators | `0.1.0+preview-001` ≡ `0.1.0` |
+| Slot | Syntax | Sorts? | Example | Consequence |
+|---|---|---|---|---|
+| Pre-release | `-` | Yes — affects comparison | `0.1.1-preview-001` < `0.1.1` | tools order it below its target GA |
+| Build metadata | `+` | No — ignored by comparators | `0.1.0+preview-001` ≡ `0.1.0` | GitHub's "Latest" picker cannot separate them |
 
 The `-` form is the only choice that lets any tool (Cargo, npm, pip, GitHub's "Latest" picker, `semver-cli`) correctly order pre-release tags below their target release. We accept the consequence that **`-develop-NNN`, `-testing-NNN`, `-preview-NNN` and `-release-NNN` all belong to the *next* version**, not the most recent release — they are all prereleases that sort below the bare `vX.Y.Z` GA, which is why GA alone is "latest".
 
