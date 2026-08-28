@@ -1,0 +1,24 @@
+# SimpleMotion PUBLIC-SAFE PR gate — copy this verbatim to
+# .github/workflows/sm-pr.yml in any PUBLIC repo. It is IDENTICAL in all of
+# them, exactly as the canonical stub is for internal and private repos.
+#
+# Public repos cannot use the canonical stub: GitHub refuses a public repo
+# calling an INTERNAL reusable workflow and fails it at startup with zero jobs,
+# so nothing reports. Public CAN call public, so the shared checks live in
+# simplemotion/.github, which is itself public.
+#
+# This gate is REDUCED. 3400-9992-SM-PR remains canonical for internal and
+# private repos. Do not add checks here — add them to the shared workflow, or,
+# if they are specific to one repo, to a separate workflow in that repo.
+name: PR
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pr:
+    uses: simplemotion/.github/.github/workflows/sm-pr-public.yml@main
