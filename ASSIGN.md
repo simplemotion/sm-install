@@ -16,7 +16,7 @@
 
 All contributors to this repository hereby assign all ownership, copyright, and intellectual property rights in their contributions to:
 
-**SimpleMotion.Global Pty Ltd**
+**SimpleMotion.Design Pty Ltd (ACN 611 618 770)**
 
 ## Scope of Assignment
 
@@ -33,8 +33,8 @@ By contributing to this repository, contributors acknowledge and agree that:
 
 1. They have the right to assign the intellectual property in their contributions
 2. Their contributions are original work or properly licensed for inclusion
-3. All rights, title, and interest in their contributions are assigned to SimpleMotion.Global Pty Ltd
-4. SimpleMotion.Global Pty Ltd has exclusive ownership of all contributions
+3. All rights, title, and interest in their contributions are assigned to SimpleMotion.Design Pty Ltd (ACN 611 618 770)
+4. SimpleMotion.Design Pty Ltd (ACN 611 618 770) has exclusive ownership of all contributions
 
 ## Effective Date
 
@@ -42,7 +42,7 @@ This assignment is effective from the date of each contribution to the repositor
 
 ## MIT License
 
-Copyright (c) 2026 SimpleMotion.Global Pty Ltd
+Copyright (c) 2026 SimpleMotion.Design Pty Ltd (ACN 611 618 770)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -64,9 +64,9 @@ SOFTWARE.
 
 ## Governing Entity
 
-**SimpleMotion.Global Pty Ltd**
+**SimpleMotion.Design Pty Ltd (ACN 611 618 770)**
 All rights reserved.
 
 ---
 
-*While this software is licensed under MIT terms to users, all intellectual property rights are owned by SimpleMotion.Global Pty Ltd.*
+*While this software is licensed under MIT terms to users, all intellectual property rights are owned by SimpleMotion.Design Pty Ltd (ACN 611 618 770).*
