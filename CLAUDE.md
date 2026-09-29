@@ -32,7 +32,7 @@ All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enter
 
 - **Public visibility is load-bearing.** Anything committed here is permanently public; do not paste internal docs, customer info, or credentials.
 - **No "Co-Authored-By" trailers** in commits.
-- **All IP assigned to SimpleMotion.Global Pty Ltd** per `ASSIGN.md`.
+- **All IP assigned to SimpleMotion.Design Pty Ltd (ACN 611 618 770)** per `ASSIGN.md`.
 - **Installers must be portable.** `*.sh` runs on bare macOS/Linux before any toolchain is installed — no bash-only constructs that POSIX `sh` can't read, no Homebrew assumptions, no `sudo`. `*.ps1` runs on stock Windows PowerShell.
 - **Channel set is closed**: `release`, `preview`, `develop`, `testing`. Adding a fifth channel requires creating a new channel repo and updating both `install.{sh,ps1}` and the source-repo dispatch routing.
 - **Versioning follows the SimpleMotion enterprise policy** (see appendix in `CHANGE.md`).
