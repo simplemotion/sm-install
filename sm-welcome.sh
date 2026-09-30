@@ -78,7 +78,7 @@ SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.com}"
 # the same lib when it runs in Section 2.
 eval "$(curl -fsSL "${SM_INSTALL_BASE}/sm-install-lib.sh")"
 
-# Route tempfiles under ~/SimpleMotion/.tmpdir so curl-to-mktemp writes
+# Route tempfiles under ~/.simplemotion/tmp so curl-to-mktemp writes
 # don't hit the macOS /var/folders/.../T/ failure modes (EDR scans,
 # sandbox boundaries, periodic cleanup). See sm-install-lib.sh for the
 # function body + rationale.

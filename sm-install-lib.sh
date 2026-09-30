@@ -30,10 +30,12 @@
 #                            so cosign can verify GitHub-issued attestations
 #                            natively. Cache lands in $TUF_ROOT
 #                            (~/.simplemotion/sigstore by default).
-#   sm_route_tmpdir          Route TMPDIR to ~/SimpleMotion/.tmpdir so
+#   sm_route_tmpdir          Route TMPDIR to ~/.simplemotion/tmp so
 #                            mktemp + curl-to-tempfile writes land on
 #                            a SimpleMotion-controlled path, not the
-#                            macOS /var/folders/.../T/ default. Each
+#                            macOS /var/folders/.../T/ default. Prunes
+#                            files there older than a day, and retires
+#                            the old ~/SimpleMotion/.tmpdir. Each
 #                            entrypoint that sources this lib should
 #                            call it before the first sm_mktemp.
 #   sm_mktemp                Portable wrapper for `mktemp -p "$TMPDIR"`.
@@ -47,15 +49,32 @@
 # hits transient write failures under EDR scanning, sandbox boundaries,
 # or periodic cleanup — curl-to-tempfile then bails with `curl: (56)
 # Failure writing output to destination, passed N returned 0`. Routing
-# under ~/SimpleMotion/.tmpdir puts tempfiles on the same APFS volume
-# as the install destination (~/.simplemotion/bin/) and under user-
-# controlled state — same surface clean-all wipes.
+# under ~/.simplemotion/tmp puts tempfiles on the same APFS volume as the
+# install destination (~/.simplemotion/bin/) and under the state that
+# `sm-welcome --clean` wipes.
+#
+# It was ~/SimpleMotion/.tmpdir until 2026-09-30. That kept a retired
+# working root alive on every machine, recreated on each run, and it
+# filled up: sm-install.sh ends in `exec`, which skips its EXIT trap, so
+# every install-and-run left its binary, checksum and attestation behind
+# (12.5 MB a run). The old directory is removed here, and ~/SimpleMotion
+# with it when nothing else is in it. Files in the new one older than a
+# day are pruned, which catches `--mode run` (whose temp binary IS the
+# running program, so it cannot be removed before the exec) and any run
+# that died mid-way. A day is long enough that a concurrent install is
+# never touched.
 #
 # Falls back silently to system default if HOME isn't usable. Idempotent
 # — safe to call multiple times.
 sm_route_tmpdir() {
-    if [[ -n "${HOME:-}" ]] && mkdir -p "$HOME/SimpleMotion/.tmpdir" 2>/dev/null; then
-        export TMPDIR="$HOME/SimpleMotion/.tmpdir"
+    [[ -n "${HOME:-}" ]] || return 0
+    if [[ -d "$HOME/SimpleMotion/.tmpdir" ]]; then
+        rm -rf "$HOME/SimpleMotion/.tmpdir" 2>/dev/null || true
+        rmdir "$HOME/SimpleMotion" 2>/dev/null || true
+    fi
+    if mkdir -p "$HOME/.simplemotion/tmp" 2>/dev/null; then
+        export TMPDIR="$HOME/.simplemotion/tmp"
+        find "$TMPDIR" -type f -mtime +0 -delete 2>/dev/null || true
     fi
 }
 
