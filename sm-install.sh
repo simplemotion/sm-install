@@ -123,7 +123,7 @@ SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.com}"
 # the bootstrap and standalone-install code paths.
 eval "$(curl -fsSL "${SM_INSTALL_BASE}/sm-install-lib.sh")"
 
-# Route tempfiles under ~/SimpleMotion/.tmpdir before the first mktemp.
+# Route tempfiles under ~/.simplemotion/tmp before the first mktemp.
 # Standalone invocations (sm-welcome.sh has already set this, but
 # sm-install.sh is also invoked from other entrypoints — sm-simplicity,
 # future tools — and must self-route. Idempotent.) See sm-install-lib.sh.
@@ -577,6 +577,11 @@ install_to_dir() {
 
 exec_binary() {
     local bin="$1"
+    # `exec` replaces this process, so the EXIT trap above never runs. Remove
+    # the tempfiles here instead, keeping only the binary about to run when
+    # it IS the temp file (--mode run); sm_route_tmpdir prunes that one later.
+    rm -f "$TMPSUM" "$TMPATT" "$TMPATT_RAW"
+    [ "$bin" = "$TMPBIN" ] || rm -f "$TMPBIN"
     # Hand off /dev/tty if available so the binary can prompt interactively
     # even when this script was started via `curl | bash`.
     if (: </dev/tty) 2>/dev/null; then
