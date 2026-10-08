@@ -55,7 +55,8 @@
 #                                           e.g. `sm-x-aarch64-apple-darwin`)
 #                                Each style needs the publisher to ship
 #                                matching asset names; ARM64 + x86_64 are
-#                                expected for all three OSes under `short`.
+#                                expected for Linux under `short`, ARM64 only
+#                                for macOS (Intel Macs are not supported).
 #   --mode install|run|install-and-run
 #                                install         = drop in install dir, exit.
 #                                run             = exec from temp file
@@ -221,6 +222,18 @@ case "$OS_KERNEL" in
     *) echo "Unsupported OS: $OS_KERNEL (only macOS and Linux; use sm-install.ps1 on Windows)" >&2; exit 1 ;;
 esac
 ARCH=$(uname -m)
+# Intel Macs are no longer supported (2026-10-08): nothing publishes an
+# x86_64-apple-darwin asset. But an Apple silicon Mac running this shell under
+# Rosetta ALSO reports x86_64, so ask the kernel before refusing: that Mac
+# can run the arm64 build natively.
+if [ "$OS_KERNEL" = Darwin ] && [ "$ARCH" = x86_64 ]; then
+    if [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; then
+        ARCH=arm64
+    else
+        echo "Intel Macs are not supported: SimpleMotion builds for Apple silicon Macs only." >&2
+        exit 1
+    fi
+fi
 case "$ARCH" in
     arm64|aarch64) ARCH="aarch64"; ARCH_SHORT="arm64" ;;
     x86_64|amd64)  ARCH="x86_64";  ARCH_SHORT="x64" ;;
