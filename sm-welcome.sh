@@ -110,8 +110,8 @@ DL_STEPS=5
 # line when it changes. If you are here because that test failed, this is
 # the number it wants.
 case "$(uname -s)" in
-    Darwin) BIN_STEPS=19 ;;   # includes the macOS-only touchid step
-    *)      BIN_STEPS=18 ;;   # Linux omits it
+    Darwin) BIN_STEPS=20 ;;   # includes the macOS-only touchid step
+    *)      BIN_STEPS=19 ;;   # Linux omits it
 esac
 
 # The palette, banner, phase rule and step renderer all come from
