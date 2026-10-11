@@ -102,13 +102,14 @@ rmSync(TREE, { recursive: true, force: true });
 const ext = `${SITE}/external`;
 // Scripts and pages only. The served docs describe both copies, so they stay as written.
 const REWRITTEN = /\.(sh|ps1|html)$/;
-const internalUrl = new RegExp(`${DOMAIN.replace(/\./g, '\\.')}/internal`, 'g');
+const internalUrl = `${DOMAIN}/internal`;
+const externalUrl = `${DOMAIN}/external`;
 let urls = 0;
 for (const file of walk(ext)) {
   if (!REWRITTEN.test(file)) continue;
   let text = readFileSync(file, 'utf8');
-  urls += (text.match(internalUrl) ?? []).length;
-  text = text.replace(internalUrl, `${DOMAIN}/external`);
+  urls += text.split(internalUrl).length - 1;
+  text = text.split(internalUrl).join(externalUrl);
   for (const [re, to] of MARKERS) text = text.replace(re, to);
   writeFileSync(file, text);
 }
@@ -124,10 +125,9 @@ for (const name of MARKED) {
 }
 for (const dir of PAGE_DIRS) {
   const html = readFileSync(`${ext}/${dir}/index.html`, 'utf8');
-  if (!html.includes(`${DOMAIN}/external`)) fail(`${dir}/index.html has no external base`);
+  if (!html.includes(externalUrl)) fail(`${dir}/index.html has no external base`);
 }
 for (const file of walk(ext).filter((f) => REWRITTEN.test(f))) {
-  if (internalUrl.test(readFileSync(file, 'utf8'))) fail(`${file} still has an internal URL`);
-  internalUrl.lastIndex = 0;
+  if (readFileSync(file, 'utf8').includes(internalUrl)) fail(`${file} still has an internal URL`);
 }
 console.log(`built ${SITE}/internal and ${SITE}/external — ${urls} URLs changed to /external`);
