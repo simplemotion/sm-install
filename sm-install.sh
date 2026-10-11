@@ -196,10 +196,23 @@ if [[ "$SM_INSTALL_AUDIENCE" == external && "$CHANNEL" != release && "$CHANNEL" 
     printf '  Staff: use the installers at %s/internal instead.\n' "https://install.simplemotion.dev" >&2
     exit 1
 fi
+# preview and release each have a public repo and a private -internal repo
+# (since 2026-10-11). A public package is on the public repo; an internal
+# package is on sm-<channel>-internal, which only staff can read. The internal
+# copy tries the public repo first, then the internal one. The external copy
+# never tries the internal one. --repo turns the fallback off.
+REPO_FROM_FLAG=false
+[[ -n "$REPO" ]] && REPO_FROM_FLAG=true
 if [[ -z "$REPO" ]]; then
     REPO="simplemotion/sm-${CHANNEL}"
 fi
+INTERNAL_FALLBACK=false
+if [[ "$REPO_FROM_FLAG" == false && "$SM_INSTALL_AUDIENCE" == internal ]]; then
+    case "$CHANNEL" in preview|release) INTERNAL_FALLBACK=true ;; esac
+fi
 
+SOURCE_FROM_FLAG=false
+[[ -n "$SOURCE_REPO" ]] && SOURCE_FROM_FLAG=true
 SOURCE_REPO="${SOURCE_REPO:-$REPO}"
 # Default install dir varies by package: sm-* products share
 # ~/.simplemotion/bin; everything else falls back to the XDG default.
@@ -265,7 +278,11 @@ ASSET="${PACKAGE}-${SUFFIX}"
 #   silently installing the wrong asset. Probing the prefix first means
 #   this script keeps working across that change in either direction,
 #   rather than needing to be deployed in lockstep with it.
-if [[ -z "$VERSION" ]]; then
+# Resolve TAG for PACKAGE on REPO. Sets TAG, or leaves it empty.
+TAG_PREFIX_ARG="$TAG_PREFIX"
+resolve_tag() {
+    TAG=""
+    TAG_PREFIX="$TAG_PREFIX_ARG"
     # Probe the package-prefixed namespace before the bare pointer.
     #
     # per_page=100 because the channel repos are SHARED: sm-develop already
@@ -291,6 +308,15 @@ if [[ -z "$VERSION" ]]; then
         TAG=$(gh_api "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
               | awk -F'"' '/"tag_name":/ {print $4; exit}' || true)
     fi
+}
+
+if [[ -z "$VERSION" ]]; then
+    resolve_tag
+    if [[ -z "${TAG:-}" && "$INTERNAL_FALLBACK" == true ]]; then
+        REPO="simplemotion/sm-${CHANNEL}-internal"
+        resolve_tag
+        [[ -n "${TAG:-}" ]] && sm_ok "$PACKAGE is an internal package: using $REPO"
+    fi
     if [[ -z "${TAG:-}" ]]; then
         {
             # A non-public channel returns 404 to an unauthenticated caller,
@@ -300,8 +326,11 @@ if [[ -z "$VERSION" ]]; then
             # there, so say which case we cannot rule out.
             # release and preview are public (preview since 2026-10-11), so a
             # 404 there means that nothing is published.
-            case "$CHANNEL" in
-                develop|testing)
+            NEEDS_AUTH=false
+            case "$CHANNEL" in develop|testing) NEEDS_AUTH=true ;; esac
+            [[ "$INTERNAL_FALLBACK" == true ]] && NEEDS_AUTH=true
+            case "$NEEDS_AUTH" in
+                true)
                     if [ -z "$SM_GH_TOKEN" ]; then
                         printf '\n  [x] Cannot read the %s channel: no GitHub credentials found.\n' "$CHANNEL"
                         printf '      https://github.com/%s is not public, so an unauthenticated\n' "$REPO"
@@ -314,7 +343,11 @@ if [[ -z "$VERSION" ]]; then
                     ;;
             esac
             printf '\n  [x] No %s build of %s is published yet.\n' "$CHANNEL" "$PACKAGE"
-            printf '      (https://github.com/%s has no release to install.)\n\n' "$REPO"
+            if [[ "$INTERNAL_FALLBACK" == true ]]; then
+                printf '      (Neither https://github.com/simplemotion/sm-%s nor https://github.com/simplemotion/sm-%s-internal has one.)\n\n' "$CHANNEL" "$CHANNEL"
+            else
+                printf '      (https://github.com/%s has no release to install.)\n\n' "$REPO"
+            fi
             printf '      Try another channel, e.g.:\n'
             printf '        curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh | bash -s -- --channel release\n\n'
             printf '      Or contact executive@simplemotion.com if you expected a %s build.\n\n' "$CHANNEL"
@@ -323,7 +356,14 @@ if [[ -z "$VERSION" ]]; then
     fi
 else
     TAG="$VERSION"
+    if [[ "$INTERNAL_FALLBACK" == true ]] \
+        && ! gh_api "https://api.github.com/repos/${REPO}/releases/tags/${TAG}" >/dev/null 2>&1 \
+        && gh_api "https://api.github.com/repos/simplemotion/sm-${CHANNEL}-internal/releases/tags/${TAG}" >/dev/null 2>&1; then
+        REPO="simplemotion/sm-${CHANNEL}-internal"
+        sm_ok "$PACKAGE $TAG is an internal package: using $REPO"
+    fi
 fi
+[[ "$SOURCE_FROM_FLAG" == false ]] && SOURCE_REPO="$REPO"
 
 URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 
