@@ -20,19 +20,19 @@ Binaries themselves live in channel-specific repos:
 
 | Channel | Repo | Visibility | Audience |
 |---|---|---|---|
-| `release` | [simplemotion/sm-release](https://github.com/simplemotion/sm-release) | public | All consumers — stable production builds |
-| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | public | Early access to the next public GA — all consumers |
-| `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | staff | Earliest development builds |
-| `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | staff | In-flight test builds |
+| `release` | [simplemotion/sm-release-external](https://github.com/simplemotion/sm-release-external) | public | All consumers — stable production builds |
+| `preview` | [simplemotion/sm-preview-external](https://github.com/simplemotion/sm-preview-external) | public | Early access to the next public GA — all consumers |
+| `develop` | [simplemotion/sm-develop-external](https://github.com/simplemotion/sm-develop-external) | staff | Earliest development builds |
+| `testing` | [simplemotion/sm-testing-external](https://github.com/simplemotion/sm-testing-external) | staff | In-flight test builds |
 | `develop` (internal packages) | `simplemotion/sm-develop-internal` | staff | Earliest builds of internal packages |
 | `testing` (internal packages) | `simplemotion/sm-testing-internal` | staff | Test builds of internal packages |
 | `preview` (internal packages) | `simplemotion/sm-preview-internal` | staff | The next GA of internal packages |
 | `release` (internal packages) | `simplemotion/sm-release-internal` | staff | GA builds of internal packages |
 
 Every channel has two repos: there are **two discrete release paths** (since
-2026-10-11). A public package is on `sm-<channel>`, and an internal package is
+2026-10-11). An external package is on `sm-<channel>-external`, and an internal package is
 on `sm-<channel>-internal`. On the internal installer copy, every `--channel`
-looks in `sm-<channel>` first, then in `sm-<channel>-internal`, so staff use
+looks in `sm-<channel>-external` first, then in `sm-<channel>-internal`, so staff use
 the same channel names for every package. The external copy never looks in an
 `-internal` repo.
 
@@ -46,7 +46,7 @@ channels are private repos reachable by named teams:
 | `release`, `preview` | Anyone, no account |
 | `develop`, `testing`, and all four `-internal` repos | `ent:sm-executive`, `ent:sm-employees` |
 
-`preview` carries public-eligible packages only. A staff-only package goes from
+`preview` carries external packages only. A staff-only package goes from
 stops at `testing` and never goes to `preview`. `3400-9993-SM-Publish`
 enforces this, and a promotion to `preview` needs two admin approvals, as a
 promotion to `release` does.
@@ -70,9 +70,9 @@ develop → testing → preview (GA vX.Y.Z, pre-release) → release   every pac
 ```
 
 Which preview and release repo a package uses is decided by
-`channels/public-packages.txt` in `3400-9993-SM-Publish` — **default deny**,
+`channels/external-packages.txt` in `3400-9993-SM-Publish` — **default deny**,
 so a package goes to the `-internal` repos until it is explicitly listed as
-public-eligible. The `private` channel was removed on 2026-10-11.
+external. The `private` channel was removed on 2026-10-11.
 
 ## Channel pages
 
@@ -143,10 +143,10 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 
 | Selector | Resolves to |
 |---|---|
-| `--channel release` (default) or `SM_CHANNEL=release` | newest release on `simplemotion/sm-release` |
-| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` (public, no account needed) |
-| `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (not public — requires authed `gh` with read access) |
-| `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (not public — requires authed `gh`) |
+| `--channel release` (default) or `SM_CHANNEL=release` | newest release on `simplemotion/sm-release-external` |
+| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview-external` (public, no account needed) |
+| `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop-external` (not public — requires authed `gh` with read access) |
+| `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing-external` (not public — requires authed `gh`) |
 `--channel private` is refused: the `private` channel was removed on 2026-10-11, and staff-only packages are on `testing`.
 
 ## What the installers do

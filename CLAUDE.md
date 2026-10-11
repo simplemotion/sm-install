@@ -8,29 +8,29 @@ Guidance for Claude Code working in this repository.
 
 This repo contains **no binaries**. It is the routing layer between consumers and the four channel repos that host actual release assets.
 
-## Four-repo architecture
+## Channel repos
 
 | Repo | Visibility | Role |
 |---|---|---|
 | `simplemotion/sm-install` (this) | public | Installer scripts + Pages |
-| `simplemotion/sm-release` | public | Production binaries |
-| `simplemotion/sm-preview` | public | Preview / beta binaries |
-| `simplemotion/sm-develop` | internal | Development — earliest builds |
-| `simplemotion/sm-testing` | private | In-flight test builds |
+| `simplemotion/sm-release-external` | public | Production binaries |
+| `simplemotion/sm-preview-external` | public | Preview / beta binaries |
+| `simplemotion/sm-develop-external` | private | Development — earliest builds |
+| `simplemotion/sm-testing-external` | private | In-flight test builds |
 | `simplemotion/sm-develop-internal` | private | Develop builds of internal packages |
 | `simplemotion/sm-testing-internal` | private | Test builds of internal packages |
 | `simplemotion/sm-preview-internal` | private | Preview of internal packages |
 | `simplemotion/sm-release-internal` | private | GA of internal packages |
 
-Every channel has a public-path repo and a private `-internal` repo (two discrete paths). On the internal copy, `sm-install.sh` tries `sm-<channel>` first and then `sm-<channel>-internal`. The external copy never tries an `-internal` repo, and `--repo` turns the fallback off.
+Every channel has an `-external` repo and a private `-internal` repo (two discrete paths). On the internal copy, `sm-install.sh` tries `sm-<channel>-external` first and then `sm-<channel>-internal`. The external copy never tries an `-internal` repo, and `--repo` turns the fallback off.
 
-`sm-install.sh` and `sm-install.ps1` map `--channel <name>` to `simplemotion/sm-<name>` and fetch the appropriate `releases/latest`. The channel-repo split avoids the prerelease-flag + latest-flag conflict that the prior `sm-get` single-repo design hit on 2026-05-16.
+`sm-install.sh` and `sm-install.ps1` map `--channel <name>` to `simplemotion/sm-<name>-external` (renamed from `sm-<name>` on 2026-10-11) and fetch the appropriate `releases/latest`. The channel-repo split avoids the prerelease-flag + latest-flag conflict that the prior `sm-get` single-repo design hit on 2026-05-16.
 
 All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enterprise naming rule (see `9000-0000-SM-Govern/DISTRIBUTE.md`).
 
 ## What this repo is NOT
 
-- **Not the binaries.** They live in the four channel repos above.
+- **Not the binaries.** They live in the channel repos above.
 - **Not the source.** Each product has its own source repo (e.g., `3400-0000-SM-Software/3400-0009-SM-Welcome` for `sm-welcome`). Attestations are signed against the source repo; `install.{sh,ps1}` verify with `gh attestation verify --bundle <asset>.sigstore.jsonl --repo <source>`.
 - **Not the build pipeline.** Builds run in the source repos and dispatch publish events into the right channel repo based on the tag suffix.
 

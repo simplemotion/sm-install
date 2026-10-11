@@ -19,10 +19,11 @@
 #   --channel release|preview|develop|testing
 #                                Channel to resolve into a tag. Each
 #                                channel maps to its own GitHub repo:
-#                                  release → simplemotion/sm-release  (public)
-#                                  preview → simplemotion/sm-preview  (public)
-#                                  develop → simplemotion/sm-develop  (staff — needs authed gh)
-#                                  testing → simplemotion/sm-testing  (staff — needs authed gh)
+#                                  release → simplemotion/sm-release-external  (public)
+#                                  preview → simplemotion/sm-preview-external  (public)
+#                                  develop → simplemotion/sm-develop-external  (staff — needs authed gh)
+#                                  testing → simplemotion/sm-testing-external  (staff — needs authed gh)
+#                                Internal packages are on sm-<channel>-internal.
 #                                Default: $SM_CHANNEL or 'release'.
 #                                Staff-only packages stop at testing. The
 #                                'private' channel was removed on 2026-10-11.
@@ -196,16 +197,16 @@ if [[ "$SM_INSTALL_AUDIENCE" == external && "$CHANNEL" != release && "$CHANNEL" 
     printf '  Staff: use the installers at %s/internal instead.\n' "https://install.simplemotion.dev" >&2
     exit 1
 fi
-# Every channel has a public-path repo and a private -internal repo: two
-# discrete release paths (since 2026-10-11). A public package is on
-# sm-<channel>; an internal package is on sm-<channel>-internal, which only
-# staff can read. The internal copy tries sm-<channel> first, then the
-# -internal repo. The external copy never tries an -internal repo. --repo
+# Every channel has an -external repo and a private -internal repo: two
+# discrete release paths (since 2026-10-11). An external package is on
+# sm-<channel>-external; an internal package is on sm-<channel>-internal,
+# which only staff can read. The internal copy tries the -external repo
+# first, then the -internal repo. The external copy never tries an -internal repo. --repo
 # turns the fallback off.
 REPO_FROM_FLAG=false
 [[ -n "$REPO" ]] && REPO_FROM_FLAG=true
 if [[ -z "$REPO" ]]; then
-    REPO="simplemotion/sm-${CHANNEL}"
+    REPO="simplemotion/sm-${CHANNEL}-external"
 fi
 INTERNAL_FALLBACK=false
 if [[ "$REPO_FROM_FLAG" == false && "$SM_INSTALL_AUDIENCE" == internal ]]; then
@@ -345,7 +346,7 @@ if [[ -z "$VERSION" ]]; then
             esac
             printf '\n  [x] No %s build of %s is published yet.\n' "$CHANNEL" "$PACKAGE"
             if [[ "$INTERNAL_FALLBACK" == true ]]; then
-                printf '      (Neither https://github.com/simplemotion/sm-%s nor https://github.com/simplemotion/sm-%s-internal has one.)\n\n' "$CHANNEL" "$CHANNEL"
+                printf '      (Neither https://github.com/simplemotion/sm-%s-external nor https://github.com/simplemotion/sm-%s-internal has one.)\n\n' "$CHANNEL" "$CHANNEL"
             else
                 printf '      (https://github.com/%s has no release to install.)\n\n' "$REPO"
             fi
@@ -369,7 +370,7 @@ fi
 URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 
 # Download one named asset of the resolved release to a path. The public
-# channel repos (sm-release, sm-preview) serve the plain browser download URL.
+# channel repos (sm-release-external, sm-preview-external) serve the plain browser download URL.
 # Every other channel (sm-develop, sm-testing)
 # 404s on it for everyone, so with a token present resolve the asset's
 # API url from the release JSON and fetch it as an octet-stream; fall

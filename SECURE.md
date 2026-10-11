@@ -29,7 +29,7 @@ Binaries themselves are **not** stored here. They live in `simplemotion/{release
 
 - **Adversary substitutes the installer.** GitHub serves `*.sh` / `*.ps1` over TLS; consumers pinned to `install.simplemotion.dev` get the CNAME-anchored repo.
 - **Adversary substitutes the binary.** Mitigated by SHA verification of the published `.sha256` sidecar and by sigstore build-provenance verification against the per-product source repo (e.g., `3400-0000-SM-Software/3400-0009-SM-Welcome` for `sm-welcome`).
-- **Adversary publishes a malicious preview release.** Preview channel is documented as early-access and may regress. `release` channel consumers are unaffected because they pull from a different repo entirely (`simplemotion/sm-release` vs `simplemotion/sm-preview`).
+- **Adversary publishes a malicious preview release.** Preview channel is documented as early-access and may regress. `release` channel consumers are unaffected because they pull from a different repo entirely (`simplemotion/sm-release-external` vs `simplemotion/sm-preview-external`).
 - **Adversary smuggles a binary into a staff channel.** Internal channels (`develop`, `testing`) require authed `gh` with read access to the relevant private repo; external attackers without SimpleMotion credentials cannot reach those release assets.
 
 ## Secrets handling
@@ -44,7 +44,7 @@ If you've downloaded a SimpleMotion release binary and want to verify its proven
 
 ### What we sign
 
-Every release asset published on `simplemotion/sm-release` / `sm-preview` / `sm-develop` / `sm-testing` ships with two sidecar files:
+Every release asset published on `simplemotion/sm-release-external` / `sm-preview` / `sm-develop` / `sm-testing` ships with two sidecar files:
 
 - `<asset>.sha256` — SHA256 hash for transport-integrity verification.
 - `<asset>.sigstore.jsonl` — sigstore build-provenance bundle, anchoring the binary to a specific GitHub Actions workflow run in the per-product source repo.

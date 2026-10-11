@@ -128,7 +128,7 @@ if ($SmInstallAudience -eq 'external' -and $Channel -notin @('release', 'preview
 # The 'private' channel was removed on 2026-10-11; staff-only packages stop at
 # testing. ValidateSet above refuses it.
 # Channel -> repo defaulting. Each channel maps to its own GitHub repo.
-if (-not $Repo) { $Repo = "simplemotion/sm-$Channel" }
+if (-not $Repo) { $Repo = "simplemotion/sm-$Channel-external" }
 if (-not $SourceRepo) { $SourceRepo = $Repo }
 if (-not $InstallDir) {
     if ($env:SM_INSTALL_DIR) {
