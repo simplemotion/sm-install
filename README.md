@@ -24,7 +24,6 @@ Binaries themselves live in channel-specific repos:
 | `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | public | Early access to the next public GA — all consumers |
 | `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | staff | Earliest development builds |
 | `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | staff | In-flight test builds |
-| `private` | [simplemotion/sm-private](https://github.com/simplemotion/sm-private) | staff | **GA** builds of products that are never published publicly |
 
 Each channel repo has its own `releases/latest` namespace, so channel selection is unambiguous and there's no prerelease-flag coordination required.
 
@@ -34,10 +33,10 @@ channels are private repos reachable by named teams:
 | Channel | Read access |
 |---|---|
 | `release`, `preview` | Anyone, no account |
-| `develop`, `testing`, `private` | `ent:sm-executive`, `ent:sm-employees` |
+| `develop`, `testing` | `ent:sm-executive`, `ent:sm-employees` |
 
 `preview` carries public-eligible packages only. A staff-only package goes from
-`testing` to `private` and never goes to `preview`. `3400-9993-SM-Publish`
+stops at `testing` and never goes to `preview`. `3400-9993-SM-Publish`
 enforces this, and a promotion to `preview` needs two admin approvals, as a
 promotion to `release` does.
 
@@ -53,22 +52,18 @@ than guessing.
 
 The build happens **once**, at `develop`. Every later stage promotes that same
 artifact, so its build counter `NNN` is carried unchanged and GA is byte
-identical to what was tested. After `testing` the ladder forks, and a package
-has exactly one terminal:
+identical to what was tested. A package has exactly one terminal:
 
 ```
-                            ┌→ preview (GA vX.Y.Z, pre-release) → release   PUBLIC PACKAGES
-develop → testing ──────────┤
-                            └→ private (GA vX.Y.Z)                          STAFF-ONLY PACKAGES
-
-v0.1.0-develop-249 → v0.1.0-testing-249 → v0.1.0-preview-249 → v0.1.0-release-249 → v0.1.0
+develop → testing → preview (GA vX.Y.Z, pre-release) → release   EXTERNAL PACKAGES
+develop → testing                                               INTERNAL PACKAGES (stop here)
 ```
 
-Which fork a package takes is decided by `channels/public-packages.txt` in
-`3400-9993-SM-Publish` — **default deny**, so a package is staff-only until it
-is explicitly listed as public-eligible. `sm-private` carries finalised
-`vX.Y.Z` only; there is no `-private-NNN` stage, because `testing` is the
-candidate rung for both ladders.
+Which ladder a package takes is decided by `channels/public-packages.txt` in
+`3400-9993-SM-Publish` — **default deny**, so a package is internal until it
+is explicitly listed as public-eligible. Staff install internal packages from
+`testing` through the `/internal` copy. The `private` channel was removed on
+2026-10-11.
 
 ## Channel pages
 
@@ -143,9 +138,7 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 | `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` (public, no account needed) |
 | `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (not public — requires authed `gh` with read access) |
 | `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (not public — requires authed `gh`) |
-| `--channel private` or `SM_CHANNEL=private` | newest GA release on `simplemotion/sm-private` (not public — requires authed `gh`) |
-
-`private` was a legacy alias for `develop` until 2026-08-19, from when the `sm-private` channel repo was renamed `sm-develop`. It is now a channel in its own right and no longer redirects.
+`--channel private` is refused: the `private` channel was removed on 2026-10-11, and staff-only packages are on `testing`.
 
 ## What the installers do
 
@@ -172,9 +165,9 @@ The verified binary is kept in a per-channel store, **channel first**:
 │  └── sm-welcome/  v0.1.0  v0.0.9     ← every version ever installed
 ├── preview/
 │  └── sm-mcp/      sm-mcp-v0.1.0-preview-249
-├── develop/  testing/  …
-└── private/                           ← never published publicly
-   └── sm-mcp/      sm-mcp-v0.1.0
+├── develop/
+└── testing/                           ← staff only
+   └── sm-mcp/      v0.1.0-testing-249
 ```
 
 **Nothing is pruned.** The leaf is the release tag, so rolling back is
@@ -191,18 +184,18 @@ The store is the source of truth; `~/.simplemotion/bin` holds only symlinks, so
 re-installing from a different channel just re-points the link. `--install-dir`
 and `SM_INSTALL_DIR` choose where the symlinks live — the store path is fixed.
 
-**Grouping by channel makes the private binaries separable.** Everything from
-the private channel lives under one tree, so removing all of it is one command:
+**Grouping by channel makes the staff binaries separable.** Everything from
+one staff channel lives under one tree, so removing all of it is one command:
 
 ```bash
-rm -rf ~/.simplemotion/share/private
+rm -rf ~/.simplemotion/share/testing
 ```
 
 Re-run the installer for anything you still want, and it will come back from a
 channel you can reach.
 
-Someone without access to the private channel **never creates that directory**,
-because they can never download from it. There is no empty `private/` to
+Someone without access to a staff channel **never creates that directory**,
+because they can never download from it. There is no empty `testing/` to
 explain and nothing to tidy up on a non-staff machine.
 
 > Until 2026-08-19 the store was `<package>/sm-<channel>/<package>`, which

@@ -16,22 +16,16 @@
 #                                .exe on this script; .ps1 adds it).
 #
 # Optional flags:
-#   --channel release|preview|develop|testing|private
+#   --channel release|preview|develop|testing
 #                                Channel to resolve into a tag. Each
 #                                channel maps to its own GitHub repo:
 #                                  release → simplemotion/sm-release  (public)
-#                                  preview → simplemotion/sm-preview  (staff — needs authed gh)
+#                                  preview → simplemotion/sm-preview  (public)
 #                                  develop → simplemotion/sm-develop  (staff — needs authed gh)
 #                                  testing → simplemotion/sm-testing  (staff — needs authed gh)
-#                                  private → simplemotion/sm-private  (staff — needs authed gh)
 #                                Default: $SM_CHANNEL or 'release'.
-#                                'private' is the GA channel for products
-#                                that are never published publicly. It sits
-#                                beside release and is a TERMINAL like it:
-#                                finalised vX.Y.Z only, never a -NNN
-#                                candidate. Until 2026-08-19 'private' was a
-#                                legacy ALIAS for develop; it is now a channel
-#                                in its own right and no longer redirects.
+#                                Staff-only packages stop at testing. The
+#                                'private' channel was removed on 2026-10-11.
 #   --repo OWNER/NAME            Override the channel→repo default.
 #                                Useful for development or hosting on a
 #                                non-SimpleMotion repo.
@@ -184,21 +178,14 @@ esac
 # `releases/latest` on each is unambiguous and there's no prerelease
 # flag dance. `--repo` overrides for development / external use.
 case "$CHANNEL" in
-    release|preview|develop|testing|private) ;;
-    # 'private' USED to be a legacy alias for develop, from when the
-    # sm-private channel repo was renamed sm-develop. It is now a channel in
-    # its own right — the GA terminal for products that never leave
-    # SimpleMotion — so the alias is gone rather than silently redirecting a
-    # caller to a different channel than the one they named. Nothing
-    # automated depended on it: install receipts record the channel but are
-    # only ever written, never read back to select one.
-    staff)
-        # The private channel was called 'staff' for part of 2026-08-19,
-        # before it was named. Fail rather than guess: it never shipped in a
-        # release of this script, so anyone passing it is reading stale notes.
-        echo "sm-install.sh: channel 'staff' was renamed 'private' before release; use --channel private" >&2
+    release|preview|develop|testing) ;;
+    private|staff)
+        # The private channel (briefly called 'staff') was removed on
+        # 2026-10-11. Staff-only packages stop at testing. Fail with the
+        # replacement rather than guess.
+        echo "sm-install.sh: the '$CHANNEL' channel was removed; staff-only packages are on --channel testing" >&2
         exit 1 ;;
-    *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing|private)" >&2; exit 1 ;;
+    *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing)" >&2; exit 1 ;;
 esac
 # The external copy serves the freelance and customers cohorts, which can read
 # the release and preview channels only. Stop here with a clear message, not
@@ -314,7 +301,7 @@ if [[ -z "$VERSION" ]]; then
             # release and preview are public (preview since 2026-10-11), so a
             # 404 there means that nothing is published.
             case "$CHANNEL" in
-                develop|testing|private)
+                develop|testing)
                     if [ -z "$SM_GH_TOKEN" ]; then
                         printf '\n  [x] Cannot read the %s channel: no GitHub credentials found.\n' "$CHANNEL"
                         printf '      https://github.com/%s is not public, so an unauthenticated\n' "$REPO"
@@ -342,7 +329,7 @@ URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 
 # Download one named asset of the resolved release to a path. The public
 # channel repos (sm-release, sm-preview) serve the plain browser download URL.
-# Every other channel (sm-develop, sm-testing, sm-private)
+# Every other channel (sm-develop, sm-testing)
 # 404s on it for everyone, so with a token present resolve the asset's
 # API url from the release JSON and fetch it as an octet-stream; fall
 # back to the browser URL when unauthenticated or the asset is missing.
@@ -535,13 +522,13 @@ install_to_dir() {
     #
     # CHANNEL FIRST, package second. It used to be <package>/sm-<channel>,
     # which scattered a channel's binaries across one directory per package.
-    # Grouping by channel means everything from the private channel lives
+    # Grouping by channel means everything from one staff channel lives
     # under a single tree that can be removed in one command:
     #
-    #     rm -rf ~/.simplemotion/share/private
+    #     rm -rf ~/.simplemotion/share/testing
     #
     # and someone without access to that channel never creates the directory
-    # at all, because they can never download from it. The private binaries
+    # at all, because they can never download from it. The staff binaries
     # are therefore both obvious and separable rather than interleaved with
     # public ones.
     # VERSIONED, and nothing is pruned. The leaf is the release tag, so every
@@ -575,8 +562,8 @@ install_to_dir() {
 
     # Retire this package's legacy per-package store for THIS channel, after
     # the new copy and the symlink are in place. Left alone it would strand a
-    # stale binary outside the channel tree — which for the private channel
-    # would mean `rm -rf share/private` no longer removing everything private,
+    # stale binary outside the channel tree — which for a staff channel
+    # would mean `rm -rf share/testing` no longer removing all of it,
     # defeating the reason for the layout. Other channels' legacy dirs are
     # untouched; each retires itself on its next install.
     legacy_dir="$HOME/.simplemotion/share/${PACKAGE}/sm-${CHANNEL}"
