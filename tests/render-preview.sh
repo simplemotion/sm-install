@@ -3,7 +3,7 @@
 #
 # The look of an install used to be reviewable only by running one, which
 # meant a design change could not be seen until it had already shipped to
-# install.simplemotion.com. This replays the same renderer calls the real
+# install.simplemotion.dev. This replays the same renderer calls the real
 # scripts make, against the same library, so the format can be read, diffed
 # and argued about in a pull request.
 #

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "install.simplemotion.com — static welcome/install site; TS bundled by esbuild at deploy.",
+  "description": "install.simplemotion.dev — static welcome/install site; TS bundled by esbuild at deploy.",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "node sm-build.ts"

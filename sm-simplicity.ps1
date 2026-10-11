@@ -2,8 +2,8 @@
 # Thin wrapper around sm-install.ps1 - installs sm-simplicity to PATH.
 #
 # Usage:
-#   irm https://install.simplemotion.com/sm-simplicity.ps1 | iex
-#   $env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-simplicity.ps1 | iex
+#   irm https://install.simplemotion.dev/internal/sm-simplicity.ps1 | iex
+#   $env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/internal/sm-simplicity.ps1 | iex
 
 $ErrorActionPreference = 'Stop'
 
@@ -16,19 +16,23 @@ $ErrorActionPreference = 'Stop'
 # Source the shared install-toolchain library. Brings in Invoke-Pwsh7Guard
 # (used immediately below) plus the helpers sm-install.ps1 needs once
 # relaunched under pwsh 7 (Confirm-AssetDigest, Find-Cosign, etc.).
-$smInstallLib = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install-lib.ps1')
+# The audience of this copy. sm-build.ts writes 'external' here in the copy
+# that it serves from /external. The served path sets it, not the environment.
+$SmInstallAudience = 'internal'
+$SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { "https://install.simplemotion.dev/$SmInstallAudience" }
+$smInstallLib = (New-Object Net.WebClient).DownloadString("$SmInstallBase/sm-install-lib.ps1")
 Invoke-Expression $smInstallLib
 
 # On Windows PowerShell 5.1, relaunches this script under pwsh 7 (installing
 # a portable copy into ~/.local/bin if absent) and exits. No-op on pwsh 6+.
-Invoke-Pwsh7Guard -ScriptUrl 'https://install.simplemotion.com/sm-simplicity.ps1'
+Invoke-Pwsh7Guard -ScriptUrl "$SmInstallBase/sm-simplicity.ps1"
 
 Write-Host ""
 Write-Host "  SimpleMotion - Simplicity Installer"
 Write-Host "  ==================================="
 Write-Host ""
 
-$installer = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.com/sm-install.ps1')
+$installer = (New-Object Net.WebClient).DownloadString("$SmInstallBase/sm-install.ps1")
 $sb = [ScriptBlock]::Create($installer)
 & $sb -Package 'sm-simplicity' `
       -SourceRepo '3404-0000-SM-Simplicity-v04/3404-0001-SM-Simplicity' `

@@ -4,8 +4,8 @@
 #
 # Usage (command substitution avoids the curl: (56) race that pipe-into-
 # bash forms produce when sm-install.sh hits its trailing `exec`):
-#   bash -c "$(curl -fsSL https://install.simplemotion.com/sm-simplicity.sh)" sm-simplicity
-#   SM_CHANNEL=preview bash -c "$(curl -fsSL https://install.simplemotion.com/sm-simplicity.sh)" sm-simplicity
+#   bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-simplicity.sh)" sm-simplicity
+#   SM_CHANNEL=preview bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-simplicity.sh)" sm-simplicity
 #
 # Channel selection via SM_CHANNEL (release | preview); default release.
 # Installs the Simplicity v04 HMI (Rust + Slint; the legacy tier launchers
@@ -21,7 +21,11 @@ curl() { command curl --tlsv1.2 "$@"; }
 
 printf '\n  SimpleMotion — Simplicity Installer\n  ═══════════════════════════════════\n\n'
 
-INSTALL_SH=$(curl -fsSL "https://install.simplemotion.com/sm-install.sh")
+# The audience of this copy. sm-build.ts writes 'external' here in the copy
+# that it serves from /external. The served path sets it, not the environment.
+SM_INSTALL_AUDIENCE='internal'
+SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.dev/${SM_INSTALL_AUDIENCE}}"
+INSTALL_SH=$(curl -fsSL "${SM_INSTALL_BASE}/sm-install.sh")
 exec bash -c "$INSTALL_SH" install \
     --package sm-simplicity \
     --source-repo 3404-0000-SM-Simplicity-v04/3404-0001-SM-Simplicity \

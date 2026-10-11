@@ -7,7 +7,7 @@
 #
 # Usage (from a `bash -c` curl|bash entrypoint where the lib needs to be
 # eval'd into the current shell so the functions are available):
-#   eval "$(curl -fsSL https://install.simplemotion.com/sm-install-lib.sh)"
+#   eval "$(curl -fsSL https://install.simplemotion.dev/internal/sm-install-lib.sh)"
 #
 # Functions:
 #   sm_palette, sm_banner,   The shared output format — palette, banner,

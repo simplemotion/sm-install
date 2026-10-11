@@ -6,9 +6,9 @@
 # the trailing `exec` never closes a still-active curl pipe — the (56)
 # 'Failure writing output' message that pipe/process-sub forms emit is
 # gone):
-#   bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome
-#   bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome --email me@example.com
-#   SM_CHANNEL=preview bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome
+#   bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome
+#   bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome --email me@example.com
+#   SM_CHANNEL=preview bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome
 #
 # Channel selection via SM_CHANNEL (release | preview); default release.
 #
@@ -71,7 +71,10 @@ export TUF_ROOT="${TUF_ROOT:-$HOME/.simplemotion/sigstore}"
 # be exercised end-to-end before it is deployed — `SM_INSTALL_BASE=file://$PWD`
 # runs the working tree, which is what tests/render-test.sh does. Defaults to
 # production, so every documented one-liner is unaffected.
-SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.com}"
+# The audience of this copy. sm-build.ts writes 'external' here in the copy
+# that it serves from /external. The served path sets it, not the environment.
+SM_INSTALL_AUDIENCE='internal'
+SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.dev/${SM_INSTALL_AUDIENCE}}"
 
 # Source the shared install-toolchain library. Brings in confirm_section,
 # find_cosign, ensure_cosign, initialize_cosign_tuf. sm-install.sh loads

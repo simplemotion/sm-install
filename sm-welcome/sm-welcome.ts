@@ -1,4 +1,4 @@
-// install.simplemotion.com welcome page — interactive logic.
+// install.simplemotion.dev/internal welcome page — interactive logic.
 //
 // Authored in TypeScript per the enterprise "always TS, never JS" rule;
 // bundled + minified by esbuild and inlined into index.html at deploy time
@@ -16,6 +16,11 @@ interface CmdParts {
   tail: string;
 }
 
+// The base of this copy of the site. sm-build.ts writes /external here in the
+// copy that it serves from /external.
+const SM_INSTALL_BASE = 'https://install.simplemotion.dev/internal';
+const EXTERNAL = SM_INSTALL_BASE.endsWith('/external');
+
 (function () {
   const params = new URLSearchParams(window.location.search);
   const email = params.get('email') ?? '';
@@ -31,7 +36,15 @@ interface CmdParts {
   // Gate the internal channels (Testing, Develop): enabled only for
   // simplemotion.com / simplemotion.global accounts. Others see them
   // disabled with an explanatory tooltip.
-  const internalAllowed = /@(simplemotion\.com|simplemotion\.global)$/i.test(email);
+  // The external copy serves the freelance and customers cohorts, which can
+  // read the release channel only, so it shows no other channel.
+  if (EXTERNAL) {
+    document
+      .querySelectorAll<HTMLButtonElement>('.channel-btn:not([data-channel="release"])')
+      .forEach((b) => b.remove());
+  }
+  const internalAllowed =
+    !EXTERNAL && /@(simplemotion\.com|simplemotion\.global)$/i.test(email);
   if (internalAllowed) {
     for (const id of ['testing-btn', 'develop-btn']) {
       const b = byId(id);
@@ -69,7 +82,7 @@ interface CmdParts {
       prefix.push(`$env:SM_CHANNEL="${channel}"`);
       return {
         leading: `${prefix.join('; ')}; `,
-        head: 'irm https://install.simplemotion.com/sm-welcome.ps1 | iex',
+        head: `irm ${SM_INSTALL_BASE}/sm-welcome.ps1 | iex`,
         tail: '',
       };
     }
@@ -78,7 +91,7 @@ interface CmdParts {
     args += `--channel ${channel}`;
     return {
       leading: '',
-      head: 'curl -fsSL https://install.simplemotion.com/sm-welcome.sh | bash -s --',
+      head: `curl -fsSL ${SM_INSTALL_BASE}/sm-welcome.sh | bash -s --`,
       tail: args,
     };
   };

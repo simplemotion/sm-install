@@ -116,7 +116,10 @@ gh_api() {
 # be exercised end-to-end before it is deployed — `SM_INSTALL_BASE=file://$PWD`
 # runs the working tree, which is what tests/render-test.sh does. Defaults to
 # production, so every documented one-liner is unaffected.
-SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.com}"
+# The audience of this copy. sm-build.ts writes 'external' here in the copy
+# that it serves from /external. The served path sets it, not the environment.
+SM_INSTALL_AUDIENCE='internal'
+SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.dev/${SM_INSTALL_AUDIENCE}}"
 
 # Source the shared install-toolchain library (confirm_section,
 # find_cosign, ensure_cosign, initialize_cosign_tuf). sm-welcome.sh
@@ -197,6 +200,14 @@ case "$CHANNEL" in
         exit 1 ;;
     *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing|private)" >&2; exit 1 ;;
 esac
+# The external copy serves the freelance and customers cohorts, which can read
+# the release channel only. Stop here with a clear message, not a 404 later.
+# This is guidance only: the channel repos control access.
+if [[ "$SM_INSTALL_AUDIENCE" == external && "$CHANNEL" != release ]]; then
+    printf 'sm-install.sh: the %s channel is for SimpleMotion staff only.\n' "$CHANNEL" >&2
+    printf '  Staff: use the installers at %s/internal instead.\n' "https://install.simplemotion.dev" >&2
+    exit 1
+fi
 if [[ -z "$REPO" ]]; then
     REPO="simplemotion/sm-${CHANNEL}"
 fi
@@ -315,7 +326,7 @@ if [[ -z "$VERSION" ]]; then
             printf '\n  [x] No %s build of %s is published yet.\n' "$CHANNEL" "$PACKAGE"
             printf '      (https://github.com/%s has no release to install.)\n\n' "$REPO"
             printf '      Try another channel, e.g.:\n'
-            printf '        curl -fsSL https://install.simplemotion.com/sm-welcome.sh | bash -s -- --channel release\n\n'
+            printf '        curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh | bash -s -- --channel release\n\n'
             printf '      Or contact executive@simplemotion.com if you expected a %s build.\n\n' "$CHANNEL"
         } >&2
         exit 1
