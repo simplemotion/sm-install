@@ -24,6 +24,15 @@ Binaries themselves live in channel-specific repos:
 | `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | public | Early access to the next public GA — all consumers |
 | `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | staff | Earliest development builds |
 | `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | staff | In-flight test builds |
+| `preview` (internal packages) | `simplemotion/sm-preview-internal` | staff | The next GA of internal packages |
+| `release` (internal packages) | `simplemotion/sm-release-internal` | staff | GA builds of internal packages |
+
+`preview` and `release` each have two repos (since 2026-10-11). A public
+package is on the public repo, and an internal package is on the `-internal`
+repo. On the internal installer copy, `--channel preview` and `--channel
+release` look in the public repo first, then in the `-internal` repo, so staff
+use the same channel names for every package. The external copy never looks in
+an `-internal` repo.
 
 Each channel repo has its own `releases/latest` namespace, so channel selection is unambiguous and there's no prerelease-flag coordination required.
 
@@ -33,7 +42,7 @@ channels are private repos reachable by named teams:
 | Channel | Read access |
 |---|---|
 | `release`, `preview` | Anyone, no account |
-| `develop`, `testing` | `ent:sm-executive`, `ent:sm-employees` |
+| `develop`, `testing`, `preview` and `release` (`-internal` repos) | `ent:sm-executive`, `ent:sm-employees` |
 
 `preview` carries public-eligible packages only. A staff-only package goes from
 stops at `testing` and never goes to `preview`. `3400-9993-SM-Publish`
@@ -55,15 +64,13 @@ artifact, so its build counter `NNN` is carried unchanged and GA is byte
 identical to what was tested. A package has exactly one terminal:
 
 ```
-develop → testing → preview (GA vX.Y.Z, pre-release) → release   EXTERNAL PACKAGES
-develop → testing                                               INTERNAL PACKAGES (stop here)
+develop → testing → preview (GA vX.Y.Z, pre-release) → release   every package
 ```
 
-Which ladder a package takes is decided by `channels/public-packages.txt` in
-`3400-9993-SM-Publish` — **default deny**, so a package is internal until it
-is explicitly listed as public-eligible. Staff install internal packages from
-`testing` through the `/internal` copy. The `private` channel was removed on
-2026-10-11.
+Which preview and release repo a package uses is decided by
+`channels/public-packages.txt` in `3400-9993-SM-Publish` — **default deny**,
+so a package goes to the `-internal` repos until it is explicitly listed as
+public-eligible. The `private` channel was removed on 2026-10-11.
 
 ## Channel pages
 

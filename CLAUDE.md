@@ -17,6 +17,10 @@ This repo contains **no binaries**. It is the routing layer between consumers an
 | `simplemotion/sm-preview` | public | Preview / beta binaries |
 | `simplemotion/sm-develop` | internal | Development — earliest builds |
 | `simplemotion/sm-testing` | private | In-flight test builds |
+| `simplemotion/sm-preview-internal` | private | Preview of internal packages |
+| `simplemotion/sm-release-internal` | private | GA of internal packages |
+
+`preview` and `release` have a public repo and a private `-internal` repo. On the internal copy, `sm-install.sh` tries the public repo first and then `sm-<channel>-internal`. The external copy never tries an `-internal` repo, and `--repo` turns the fallback off.
 
 `sm-install.sh` and `sm-install.ps1` map `--channel <name>` to `simplemotion/sm-<name>` and fetch the appropriate `releases/latest`. The channel-repo split avoids the prerelease-flag + latest-flag conflict that the prior `sm-get` single-repo design hit on 2026-05-16.
 
