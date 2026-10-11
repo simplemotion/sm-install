@@ -7,11 +7,11 @@ This is the public bootstrap entry point served at **`install.simplemotion.dev`*
 | URL | Audience | Channels |
 |---|---|---|
 | `https://install.simplemotion.dev/internal` | Executive and employees cohorts | All |
-| `https://install.simplemotion.dev/external` | Freelance and customers cohorts | `release` only |
+| `https://install.simplemotion.dev/external` | Freelance and customers cohorts | `release` and `preview` |
 
 The two copies come from the same source. The build writes the external copy
 with `/external` URLs, and its installer stops when you ask for a channel other
-than `release`. That stop is guidance only: the channel repos control access.
+than `release` or `preview`. That stop is guidance only: the channel repos control access.
 
 **Do not copy these URLs into other repos.** Link to this README in docs. Rust
 code gets the URL from the `sm-install-url` crate in `3400-0001-SM-Core`.
@@ -21,7 +21,7 @@ Binaries themselves live in channel-specific repos:
 | Channel | Repo | Visibility | Audience |
 |---|---|---|---|
 | `release` | [simplemotion/sm-release](https://github.com/simplemotion/sm-release) | public | All consumers — stable production builds |
-| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | private | Early access — staff only |
+| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | private | Early access to the next public GA — all cohorts |
 | `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | staff | Earliest development builds |
 | `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | staff | In-flight test builds |
 | `private` | [simplemotion/sm-private](https://github.com/simplemotion/sm-private) | staff | **GA** builds of products that are never published publicly |
@@ -33,15 +33,15 @@ named teams:
 
 | Channel | Teams with read access |
 |---|---|
-| `preview`, `develop`, `testing`, `private` | `ent:sm-executive`, `ent:sm-employees` |
+| `preview` | `ent:sm-executive`, `ent:sm-employees`, `ent:sm-freelance`, `ent:sm-customers` |
+| `develop`, `testing`, `private` | `ent:sm-executive`, `ent:sm-employees` |
 
-Every channel but `release` has the same two teams. Neither `ent:sm-freelance`
-nor `ent:sm-customers` is on any of them: both get `release` — the finalised,
-public GA — and nothing in flight.
+The executive and employees cohorts can read every channel. The freelance and
+customers cohorts can read `release` and `preview` only.
 
-`preview` is staff-only despite carrying *candidates* rather than internal GAs,
-because a staff-only package passes through it on the way to `private`. Reading
-preview means reading every internal product's candidate builds.
+`preview` carries public-eligible packages only (since 2026-10-11). A
+staff-only package goes from `testing` to `private` and never goes to
+`preview`. `3400-9993-SM-Publish` enforces this.
 
 `release` stays public on purpose: it is what a fresh machine bootstraps
 `sm-welcome` from, before it has `gh` or a token at all.
@@ -59,9 +59,9 @@ identical to what was tested. After `testing` the ladder forks, and a package
 has exactly one terminal:
 
 ```
-                            ┌→ preview → release(-NNN) → GA vX.Y.Z   PUBLIC
+                            ┌→ preview (GA vX.Y.Z, pre-release) → release   PUBLIC PACKAGES
 develop → testing ──────────┤
-                            └→ private (GA vX.Y.Z)                   STAFF ONLY
+                            └→ private (GA vX.Y.Z)                          STAFF-ONLY PACKAGES
 
 v0.1.0-develop-249 → v0.1.0-testing-249 → v0.1.0-preview-249 → v0.1.0-release-249 → v0.1.0
 ```

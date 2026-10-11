@@ -201,9 +201,10 @@ case "$CHANNEL" in
     *) echo "sm-install.sh: unknown --channel: $CHANNEL (use release|preview|develop|testing|private)" >&2; exit 1 ;;
 esac
 # The external copy serves the freelance and customers cohorts, which can read
-# the release channel only. Stop here with a clear message, not a 404 later.
+# the release and preview channels only. Stop here with a clear message, not
+# a 404 later.
 # This is guidance only: the channel repos control access.
-if [[ "$SM_INSTALL_AUDIENCE" == external && "$CHANNEL" != release ]]; then
+if [[ "$SM_INSTALL_AUDIENCE" == external && "$CHANNEL" != release && "$CHANNEL" != preview ]]; then
     printf 'sm-install.sh: the %s channel is for SimpleMotion staff only.\n' "$CHANNEL" >&2
     printf '  Staff: use the installers at %s/internal instead.\n' "https://install.simplemotion.dev" >&2
     exit 1
