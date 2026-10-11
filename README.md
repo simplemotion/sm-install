@@ -2,7 +2,21 @@
 
 Installer scripts for [SimpleMotion](https://simplemotion.com) binary products. One command installs the SimpleMotion CLIs.
 
-This is the public bootstrap entry point served at **`install.simplemotion.com`**. Binaries themselves live in channel-specific repos:
+This is the public bootstrap entry point served at **`install.simplemotion.dev`**, in two copies:
+
+| URL | Audience | Channels |
+|---|---|---|
+| `https://install.simplemotion.dev/internal` | Executive and employees cohorts | All |
+| `https://install.simplemotion.dev/external` | Freelance and customers cohorts | `release` only |
+
+The two copies come from the same source. The build writes the external copy
+with `/external` URLs, and its installer stops when you ask for a channel other
+than `release`. That stop is guidance only: the channel repos control access.
+
+**Do not copy these URLs into other repos.** Link to this README in docs. Rust
+code gets the URL from the `sm-install-url` crate in `3400-0001-SM-Core`.
+
+Binaries themselves live in channel-specific repos:
 
 | Channel | Repo | Visibility | Audience |
 |---|---|---|---|
@@ -64,13 +78,13 @@ candidate rung for both ladders.
 
 ```bash
 # release channel (stable)
-bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome
+bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome
 
 # preview channel (early access)
-bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome --channel preview
+bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome --channel preview
 
 # develop channel (SimpleMotion internal)
-bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome --channel develop
+bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome --channel develop
 ```
 
 The `bash -c "$(curl …)"` form (rather than `curl … | bash`) is required so the installer can read interactive prompts from your terminal.
@@ -79,10 +93,20 @@ The `bash -c "$(curl …)"` form (rather than `curl … | bash`) is required so 
 
 ```powershell
 # release channel (stable)
-irm https://install.simplemotion.com/sm-welcome.ps1 | iex
+irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex
 
 # preview channel
-$env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 | iex
+$env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex
+```
+
+Freelance and customers cohorts use the external copy:
+
+```bash
+bash -c "$(curl -fsSL https://install.simplemotion.dev/external/sm-welcome.sh)" sm-welcome
+```
+
+```powershell
+irm https://install.simplemotion.dev/external/sm-welcome.ps1 | iex
 ```
 
 ## Install — sm-simplicity (Simplicity product)
@@ -90,8 +114,10 @@ $env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 |
 ### macOS / Linux
 
 ```bash
-curl -fsSL https://install.simplemotion.com/sm-simplicity.sh | bash
+curl -fsSL https://install.simplemotion.dev/internal/sm-simplicity.sh | bash
 ```
+
+Customers use `https://install.simplemotion.dev/external/sm-simplicity.sh`.
 
 Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_DIR=/some/path`.
 

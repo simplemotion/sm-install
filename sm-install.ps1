@@ -7,7 +7,7 @@
 # PATH or execs from a temp file.
 #
 # Usage (typically called by a thin per-product wrapper):
-#   irm "https://install.simplemotion.com/sm-install.ps1" |
+#   irm "https://install.simplemotion.dev/internal/sm-install.ps1" |
 #     iex "& { $input | Out-Null }; sm-install.ps1 -Repo ... -Package ..."
 #
 # More commonly invoked indirectly via a per-product wrapper that pipes
@@ -86,7 +86,10 @@ $ErrorActionPreference = 'Stop'
 # Bash side, added in sm-install#86 after a merge raced its own Pages deploy and
 # tested a new script against the previously-deployed library. Defaults to
 # production, so every documented one-liner is unaffected.
-$SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { 'https://install.simplemotion.com' }
+# The audience of this copy. sm-build.ts writes 'external' here in the copy
+# that it serves from /external. The served path sets it, not the environment.
+$SmInstallAudience = 'internal'
+$SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { "https://install.simplemotion.dev/$SmInstallAudience" }
 
 # Read a sibling script from the base. A base that does not look like a URL is
 # treated as a directory, which is what CI uses so the checked-out script and
@@ -113,6 +116,15 @@ Invoke-Pwsh7Guard -ScriptUrl "$SmInstallBase/sm-install.ps1" -ScriptPath $PSComm
 $env:PATH = (Join-Path $HOME '.simplemotion\bin') + ';' + (Join-Path $HOME '.local\bin') + ';' + $env:PATH
 
 if (-not $Channel) { $Channel = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' } }
+# The external copy serves the freelance and customers cohorts, which can read
+# the release channel only. Stop here with a clear message, not a 404 later.
+# This is guidance only: the channel repos control access. The staff URL is
+# split so that the build rewrite of /internal to /external does not change it.
+if ($SmInstallAudience -eq 'external' -and $Channel -ne 'release') {
+    Write-Host ("  [x] The {0} channel is for SimpleMotion staff only." -f $Channel) -ForegroundColor Red
+    Write-Host ("      Staff: use the installers at {0}/internal instead." -f 'https://install.simplemotion.dev')
+    exit 1
+}
 # 'private' USED to be a legacy alias for develop, from when the sm-private
 # channel repo was renamed sm-develop. It is now a channel in its own right --
 # the GA terminal for products that never leave SimpleMotion -- so the alias is
@@ -164,7 +176,7 @@ if (-not $Version) {
             Write-Host ("      (https://github.com/{0} has no release to install.)" -f $Repo)
             Write-Host ""
             Write-Host "      Try another channel, e.g.:"
-            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 | iex"
+            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex"
             Write-Host ""
             Write-Host "      Or contact executive@simplemotion.com if you expected a $Channel build."
             Write-Host ""
@@ -181,7 +193,7 @@ if (-not $Version) {
             Write-Host ("      (https://github.com/{0} has no release to install.)" -f $Repo)
             Write-Host ""
             Write-Host "      Try another channel, e.g.:"
-            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.com/sm-welcome.ps1 | iex"
+            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex"
             Write-Host ""
             Write-Host "      Or contact executive@simplemotion.com if you expected a $Channel build."
             Write-Host ""

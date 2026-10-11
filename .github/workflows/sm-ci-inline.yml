@@ -22,7 +22,7 @@
 # same second*, and every private/internal repo runs the shared stub fine — so
 # same-repo, same-push success rules billing out.
 #
-# `sm-install` must stay public: it serves install.simplemotion.com and the
+# `sm-install` must stay public: it serves install.simplemotion.dev and the
 # bootstrap has to be fetchable anonymously. So the CI is inlined instead.
 #
 # Scope is deliberately small. This repo has no Cargo.toml, and for a non-Rust

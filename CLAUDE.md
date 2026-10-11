@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## What this repo is
 
-`simplemotion/sm-install` is the **public** installer-script home for SimpleMotion binary distribution. It hosts the shell installers consumers fetch via `curl | bash` or `irm | iex`, plus the landing page served at `install.simplemotion.com`.
+`simplemotion/sm-install` is the **public** installer-script home for SimpleMotion binary distribution. It hosts the shell installers consumers fetch via `curl | bash` or `irm | iex`, plus the landing page served at `install.simplemotion.dev`.
 
 This repo contains **no binaries**. It is the routing layer between consumers and the four channel repos that host actual release assets.
 
@@ -39,7 +39,13 @@ All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enter
 
 ## DNS / Pages
 
-`install.simplemotion.com` is served from this repo's **`main`** branch (Pages source = main, path /, HTTPS enforced) via the `CNAME` file at repo root. The `sm-welcome/index.html` landing page lives alongside the installers; there is no `gh-pages` branch.
+`install.simplemotion.dev` is a GitHub Pages site. The `sm-pages.yml` workflow builds it from `main` and deploys it. The custom domain is set in the repo Pages settings; `CNAME` is a record only. DNS is a CNAME to `simplemotion.github.io` in the Azure DNS zone `simplemotion.dev` (resource group `sm-dns`). The zone CAA must allow `letsencrypt.org`, or Pages cannot issue the certificate.
+
+- The site has two copies: `/internal` (executive and employees) and `/external` (freelance and customers, `release` channel only).
+- The source is the internal copy. `sm-build.ts` writes the external copy: it changes each `install.simplemotion.dev/internal` URL and each audience marker (`SM_INSTALL_AUDIENCE='internal'`, `$SmInstallAudience = 'internal'`) to external. The build fails if a marker or an internal URL stays.
+- To show a staff URL in a script, split the string (for example `"%s/internal"` with the domain as the argument). If you do not, the build changes it to `/external`.
+- These URLs are permanent. Do not move them again. If the host changes, change DNS only.
+- `install.simplemotion.com` was retired on 2026-10-11, with no redirect.
 
 ## When in doubt, ask
 

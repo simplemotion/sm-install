@@ -17,7 +17,7 @@ name: sm-install-smoke-test
 # green tick that proved nothing. Restore both together if Windows returns.
 #
 # NOTE, still outstanding: sm-install.ps1 and sm-welcome.ps1 are unchanged and
-# still served from install.simplemotion.com, so a Windows user following the
+# still served from install.simplemotion.dev, so a Windows user following the
 # documented one-liner now fails on a missing release asset rather than being
 # told Windows is unsupported. Deciding that message is a product call, not a
 # CI one — see 3400-0009-SM-Welcome's CHANGE.md entry for the same note.
