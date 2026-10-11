@@ -77,8 +77,10 @@ for (const { dir, entry, placeholder } of PAGES) {
   console.log(`built ${dir}/index.html — inlined ${js.length} bytes of minified JS`);
 }
 
-// 2b. One page per channel, from the sm-channel/ template: /<channel>/ lists
-//     the install commands for that channel. The template is not served.
+// 2b. Pages per channel and per product, from the sm-channel/ template:
+//     /<channel>/ lists every product with its install commands, and
+//     /<channel>/<product>/ is the page for one product on one channel.
+//     The template is not served.
 const CHANNELS = [
   { id: 'release', title: 'Release', summary: 'Stable production builds. Open to everyone.' },
   { id: 'preview', title: 'Preview', summary: 'The next release, before it is final. Open to everyone.' },
@@ -86,7 +88,31 @@ const CHANNELS = [
   { id: 'develop', title: 'Develop', summary: 'The earliest development builds. SimpleMotion staff only.' },
 ];
 const STAFF_CHANNELS = new Set(['testing', 'develop']);
+// The products that the installer site installs. The base is the internal
+// copy; step 3 changes it to /external in the external copy.
+const BASE = `https://${DOMAIN}/internal`;
+const PRODUCTS = [
+  {
+    id: 'sm-welcome',
+    summary: 'Onboarding. Sets up a SimpleMotion workstation step by step.',
+    unix: (ch: string) => `bash -c "$(curl -fsSL ${BASE}/sm-welcome.sh)" sm-welcome --channel ${ch}`,
+    windows: (ch: string) => `$env:SM_CHANNEL='${ch}'; irm ${BASE}/sm-welcome.ps1 | iex`,
+  },
+  {
+    id: 'sm-simplicity',
+    summary: 'Simplicity. Installs the sm-simplicity application.',
+    unix: (ch: string) => `SM_CHANNEL=${ch} bash -c "$(curl -fsSL ${BASE}/sm-simplicity.sh)" sm-simplicity`,
+    windows: (ch: string) => `$env:SM_CHANNEL='${ch}'; irm ${BASE}/sm-simplicity.ps1 | iex`,
+  },
+];
 const COMMANDS = /<!--SM_COMMANDS_BEGIN-->[\s\S]*<!--SM_COMMANDS_END-->/;
+const commandsHtml = (p: (typeof PRODUCTS)[number], ch: string): string =>
+  `  <p class="os">macOS / Linux</p>\n  <pre><code>${p.unix(ch)}</code></pre>\n` +
+  `  <p class="os">Windows (PowerShell)</p>\n  <pre><code>${p.windows(ch)}</code></pre>\n`;
+const navHtml = (current: string, href: (c: string) => string): string =>
+  CHANNELS.map(
+    (c) => `<a href="${href(c.id)}"${c.id === current ? ' class="active" aria-current="page"' : ''}>${c.title}</a>`,
+  ).join('');
 {
   // The SimpleMotion banner, copied from the welcome page so that the site
   // holds one copy of the image.
@@ -96,21 +122,48 @@ const COMMANDS = /<!--SM_COMMANDS_BEGIN-->[\s\S]*<!--SM_COMMANDS_END-->/;
   if (!raw.includes('<!--SM_BANNER-->')) throw new Error('sm-channel/index.html has no SM_BANNER marker');
   const tmpl = raw.replace('<!--SM_BANNER-->', banner);
   if (!COMMANDS.test(tmpl)) throw new Error('sm-channel/index.html has no SM_COMMANDS markers');
+  const fill = (v: Record<string, string>): string => {
+    let html = tmpl;
+    for (const [k, val] of Object.entries(v)) html = html.split(`{{${k}}}`).join(val);
+    if (html.includes('{{')) throw new Error(`page "${v.PAGE_TITLE}" has an unfilled placeholder`);
+    return html;
+  };
+  let pages = 0;
   for (const ch of CHANNELS) {
-    const nav = CHANNELS.map(
-      (c) => `<a href="../${c.id}/"${c.id === ch.id ? ' class="active" aria-current="page"' : ''}>${c.title}</a>`,
-    ).join('');
-    const html = tmpl
-      .split('{{CHANNEL_TITLE}}').join(ch.title)
-      .split('{{CHANNEL_SUMMARY}}').join(ch.summary)
-      .split('{{CHANNEL_NAV}}').join(nav)
-      .split('{{CHANNEL}}').join(ch.id);
-    if (html.includes('{{')) throw new Error(`channel page ${ch.id} has an unfilled placeholder`);
+    const body = PRODUCTS.map(
+      (p) => `  <h2><a href="${p.id}/">${p.id}</a></h2>\n  <p class="about">${p.summary}</p>\n` + commandsHtml(p, ch.id),
+    ).join('\n');
     mkdirSync(`${TREE}/${ch.id}`, { recursive: true });
-    writeFileSync(`${TREE}/${ch.id}/index.html`, html);
+    writeFileSync(
+      `${TREE}/${ch.id}/index.html`,
+      fill({
+        PAGE_TITLE: `${ch.title} channel`,
+        CRUMB: '',
+        HEADING: `<span class="ch">${ch.title}</span> channel`,
+        SUMMARY: ch.summary,
+        NAV: navHtml(ch.id, (c) => `../${c}/`),
+        BODY: body,
+      }),
+    );
+    pages++;
+    for (const p of PRODUCTS) {
+      mkdirSync(`${TREE}/${ch.id}/${p.id}`, { recursive: true });
+      writeFileSync(
+        `${TREE}/${ch.id}/${p.id}/index.html`,
+        fill({
+          PAGE_TITLE: `${p.id} on the ${ch.title} channel`,
+          CRUMB: `<p class="crumb"><a href="../">&larr; All products on the ${ch.title} channel</a></p>`,
+          HEADING: `<span class="ch">${p.id}</span>`,
+          SUMMARY: `${p.summary} ${ch.title} channel: ${ch.summary}`,
+          NAV: navHtml(ch.id, (c) => `../../${c}/${p.id}/`),
+          BODY: commandsHtml(p, ch.id),
+        }),
+      );
+      pages++;
+    }
   }
   rmSync(`${TREE}/sm-channel`, { recursive: true, force: true });
-  console.log(`built ${CHANNELS.length} channel pages`);
+  console.log(`built ${pages} channel and product pages`);
 }
 
 // 3. Write the tree once per audience.
@@ -157,9 +210,10 @@ const STAFF_NOTICE = `<div class="notice">This channel is for SimpleMotion staff
   employees cohorts) only. Staff use the internal copy of the installer site. The
   <a href="https://github.com/simplemotion/sm-install#readme">sm-install README</a> gives its address.</div>`;
 for (const ch of STAFF_CHANNELS) {
-  const page = `${ext}/${ch}/index.html`;
-  const html = readFileSync(page, 'utf8');
-  writeFileSync(page, html.replace(COMMANDS, STAFF_NOTICE));
+  for (const page of [`${ext}/${ch}/index.html`, ...PRODUCTS.map((p) => `${ext}/${ch}/${p.id}/index.html`)]) {
+    const html = readFileSync(page, 'utf8');
+    writeFileSync(page, html.replace(COMMANDS, STAFF_NOTICE));
+  }
 }
 
 // Verify the effect, not the steps.
@@ -175,18 +229,22 @@ for (const dir of PAGE_DIRS) {
   const html = readFileSync(`${ext}/${dir}/index.html`, 'utf8');
   if (!html.includes(externalUrl)) fail(`${dir}/index.html has no external base`);
 }
-// Every channel has a page in BOTH copies, always: /internal/<channel>/ and
-// /external/<channel>/ are permanent URLs. A missing page fails the build.
+// Every channel, and every product on every channel, has a page in BOTH
+// copies, always: /internal/<channel>/[<product>/] and /external/... are
+// permanent URLs. A missing page fails the build.
 for (const ch of CHANNELS) {
   for (const aud of ['internal', 'external']) {
-    const page = `${SITE}/${aud}/${ch.id}/index.html`;
-    if (!existsSync(page)) throw new Error(`${aud}/${ch.id}/ is missing: every channel must have a page in both copies`);
-    const html = readFileSync(page, 'utf8');
-    if (!html.includes('<img class="banner"')) throw new Error(`${aud}/${ch.id}/ has no SimpleMotion banner`);
-    const staffOnly = aud === 'external' && STAFF_CHANNELS.has(ch.id);
-    const hasCommands = html.includes(`--channel ${ch.id}`);
-    if (staffOnly === hasCommands) {
-      throw new Error(`${aud}/${ch.id}: ${staffOnly ? 'shows commands for a staff channel' : 'has no install commands'}`);
+    for (const sub of ['', ...PRODUCTS.map((p) => `${p.id}/`)]) {
+      const page = `${SITE}/${aud}/${ch.id}/${sub}index.html`;
+      const where = `${aud}/${ch.id}/${sub}`;
+      if (!existsSync(page)) throw new Error(`${where} is missing: every page must exist in both copies`);
+      const html = readFileSync(page, 'utf8');
+      if (!html.includes('<img class="banner"')) throw new Error(`${where} has no SimpleMotion banner`);
+      const staffOnly = aud === 'external' && STAFF_CHANNELS.has(ch.id);
+      const hasCommands = html.includes('<pre><code>');
+      if (staffOnly === hasCommands) {
+        throw new Error(`${where}: ${staffOnly ? 'shows commands for a staff channel' : 'has no install commands'}`);
+      }
     }
   }
 }

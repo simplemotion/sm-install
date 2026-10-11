@@ -24,7 +24,8 @@ This repo holds the installer scripts served at `install.simplemotion.com`. The 
 
 | Version | Hash | Date | Author | Notes |
 |---------|------|------|--------|-------|
-| (auto) | &mdash; | 2026-10-11 UTC | Greg Gowans | **Make the page frame wider, so the whole install command shows.** The card is 1100 px wide, not 774 px, on the welcome, Simplicity and channel pages. On a narrow screen a command wraps and is not hidden, and the welcome command box grows to fit it. |
+| (auto) | &mdash; | 2026-10-11 UTC | Greg Gowans | **Add a page for each product on each channel, and make the banner 1.5 times larger.** /<channel>/<product>/ gives the install commands for one product, for example /release/sm-welcome/. The channel pages link to them. The banner is 647 px wide, not 431 px. |
+| v0.1.2-develop-053 | 050e565 | 2026-10-11 03:57 UTC | Greg Gowans | **Make the page frame wider, so the whole install command shows.** The card is 1100 px wide, not 774 px, on the welcome, Simplicity and channel pages. On a narrow screen a command wraps and is not hidden, and the welcome command box grows to fit it. |
 | v0.1.2-develop-052 | 809b9e7 | 2026-10-11 03:52 UTC | Greg Gowans | **Put the SimpleMotion banner at the top of each channel page.** The build copies the banner image from the welcome page, so the site holds one copy of it. The build fails if a channel page has no banner. |
 | v0.1.2-develop-051 | e3a8a8b | 2026-10-11 03:37 UTC | Greg Gowans | **Add a page for each channel, and show all four channels on the external pages.** /release/, /preview/, /testing/ and /develop/ list the install commands for that channel. On the external copy, Testing and Develop are shown but disabled, and their channel pages show a staff-only notice. |
 | v0.1.2-develop-050 | 213aa25 | 2026-10-11 03:23 UTC | Greg Gowans | **sm-preview is public.** The installer no longer says that preview needs GitHub credentials, and the README shows release and preview as open to anyone. |
