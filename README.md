@@ -81,7 +81,8 @@ channel, under `https://install.simplemotion.dev/internal` and `/external`:
 
 The channels are `release`, `preview`, `testing` and `develop`. The products
 are `sm-welcome` and `sm-simplicity`. On the external copy, the testing and
-develop pages show a staff-only notice instead of commands. The build makes
+develop pages give the commands of the internal copy, because the external
+installer refuses those channels. Only staff can read those channels. The build makes
 the pages from `sm-channel/index.html` and the `PRODUCTS` list in
 `sm-build.ts`.
 
