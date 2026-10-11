@@ -37,10 +37,12 @@ const EXTERNAL = SM_INSTALL_BASE.endsWith('/external');
   // simplemotion.com / simplemotion.global accounts. Others see them
   // disabled with an explanatory tooltip.
   // The external copy serves the freelance and customers cohorts, which can
-  // read the release channel only, so it shows no other channel.
+  // read the release and preview channels only, so it shows no other channel.
   if (EXTERNAL) {
     document
-      .querySelectorAll<HTMLButtonElement>('.channel-btn:not([data-channel="release"])')
+      .querySelectorAll<HTMLButtonElement>(
+        '.channel-btn:not([data-channel="release"]):not([data-channel="preview"])',
+      )
       .forEach((b) => b.remove());
   }
   const internalAllowed =

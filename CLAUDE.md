@@ -41,7 +41,7 @@ All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enter
 
 `install.simplemotion.dev` is a GitHub Pages site. The `sm-pages.yml` workflow builds it from `main` and deploys it. The custom domain is set in the repo Pages settings; `CNAME` is a record only. DNS is a CNAME to `simplemotion.github.io` in the Azure DNS zone `simplemotion.dev` (resource group `sm-dns`). The zone CAA must allow `letsencrypt.org`, or Pages cannot issue the certificate.
 
-- The site has two copies: `/internal` (executive and employees) and `/external` (freelance and customers, `release` channel only).
+- The site has two copies: `/internal` (executive and employees) and `/external` (freelance and customers, `release` and `preview` channels only).
 - The source is the internal copy. `sm-build.ts` writes the external copy: it changes each `install.simplemotion.dev/internal` URL and each audience marker (`SM_INSTALL_AUDIENCE='internal'`, `$SmInstallAudience = 'internal'`) to external. The build fails if a marker or an internal URL stays.
 - To show a staff URL in a script, split the string (for example `"%s/internal"` with the domain as the argument). If you do not, the build changes it to `/external`.
 - These URLs are permanent. Do not move them again. If the host changes, change DNS only.

@@ -117,10 +117,11 @@ $env:PATH = (Join-Path $HOME '.simplemotion\bin') + ';' + (Join-Path $HOME '.loc
 
 if (-not $Channel) { $Channel = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 'release' } }
 # The external copy serves the freelance and customers cohorts, which can read
-# the release channel only. Stop here with a clear message, not a 404 later.
+# the release and preview channels only. Stop here with a clear message, not
+# a 404 later.
 # This is guidance only: the channel repos control access. The staff URL is
 # split so that the build rewrite of /internal to /external does not change it.
-if ($SmInstallAudience -eq 'external' -and $Channel -ne 'release') {
+if ($SmInstallAudience -eq 'external' -and $Channel -notin @('release', 'preview')) {
     Write-Host ("  [x] The {0} channel is for SimpleMotion staff only." -f $Channel) -ForegroundColor Red
     Write-Host ("      Staff: use the installers at {0}/internal instead." -f 'https://install.simplemotion.dev')
     exit 1
