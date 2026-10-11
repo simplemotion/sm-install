@@ -311,8 +311,10 @@ if [[ -z "$VERSION" ]]; then
             # API does not say "you cannot see this". Reporting the wrong one
             # sends a staff member hunting for a release that is sitting right
             # there, so say which case we cannot rule out.
+            # release and preview are public (preview since 2026-10-11), so a
+            # 404 there means that nothing is published.
             case "$CHANNEL" in
-                preview|develop|testing|private)
+                develop|testing|private)
                     if [ -z "$SM_GH_TOKEN" ]; then
                         printf '\n  [x] Cannot read the %s channel: no GitHub credentials found.\n' "$CHANNEL"
                         printf '      https://github.com/%s is not public, so an unauthenticated\n' "$REPO"
@@ -338,9 +340,9 @@ fi
 
 URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
 
-# Download one named asset of the resolved release to a path. Public
-# channel repo (sm-release) serves the plain browser download URL. Every
-# other channel (sm-preview, sm-develop, sm-testing, sm-private)
+# Download one named asset of the resolved release to a path. The public
+# channel repos (sm-release, sm-preview) serve the plain browser download URL.
+# Every other channel (sm-develop, sm-testing, sm-private)
 # 404s on it for everyone, so with a token present resolve the asset's
 # API url from the release JSON and fetch it as an octet-stream; fall
 # back to the browser URL when unauthenticated or the asset is missing.
