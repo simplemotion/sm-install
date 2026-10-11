@@ -24,7 +24,8 @@ This repo holds the installer scripts served at `install.simplemotion.com`. The 
 
 | Version | Hash | Date | Author | Notes |
 |---------|------|------|--------|-------|
-| (auto) | &mdash; | 2026-10-11 UTC | Greg Gowans | **Put the SimpleMotion banner at the top of each channel page.** The build copies the banner image from the welcome page, so the site holds one copy of it. The build fails if a channel page has no banner. |
+| (auto) | &mdash; | 2026-10-11 UTC | Greg Gowans | **Make the page frame wider, so the whole install command shows.** The card is 1100 px wide, not 774 px, on the welcome, Simplicity and channel pages. On a narrow screen a command wraps and is not hidden, and the welcome command box grows to fit it. |
+| v0.1.2-develop-052 | 809b9e7 | 2026-10-11 03:52 UTC | Greg Gowans | **Put the SimpleMotion banner at the top of each channel page.** The build copies the banner image from the welcome page, so the site holds one copy of it. The build fails if a channel page has no banner. |
 | v0.1.2-develop-051 | e3a8a8b | 2026-10-11 03:37 UTC | Greg Gowans | **Add a page for each channel, and show all four channels on the external pages.** /release/, /preview/, /testing/ and /develop/ list the install commands for that channel. On the external copy, Testing and Develop are shown but disabled, and their channel pages show a staff-only notice. |
 | v0.1.2-develop-050 | 213aa25 | 2026-10-11 03:23 UTC | Greg Gowans | **sm-preview is public.** The installer no longer says that preview needs GitHub credentials, and the README shows release and preview as open to anyone. |
 | v0.1.2-develop-049 | 1ae8303 | 2026-10-11 02:56 UTC | Greg Gowans | **The external copy accepts the preview channel.** The freelance and customers cohorts can read release and preview. The external installer and pages now allow both. Preview carries public-eligible packages only (3400-9993-SM-Publish#29). |
