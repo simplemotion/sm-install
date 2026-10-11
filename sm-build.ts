@@ -204,16 +204,17 @@ for (const file of walk(ext)) {
 }
 
 // The external installer refuses the staff channels, so the external pages
-// for them show a notice instead of commands. The notice names no URL: the
-// rewrite above would change an /internal URL to /external.
-const STAFF_NOTICE = `<div class="notice">This channel is for SimpleMotion staff (the executive and
-  employees cohorts) only. Staff use the internal copy of the installer site. The
-  <a href="https://github.com/simplemotion/sm-install#readme">sm-install README</a> gives its address.</div>`;
-for (const ch of STAFF_CHANNELS) {
-  for (const page of [`${ext}/${ch}/index.html`, ...PRODUCTS.map((p) => `${ext}/${ch}/${p.id}/index.html`)]) {
-    const html = readFileSync(page, 'utf8');
-    writeFileSync(page, html.replace(COMMANDS, STAFF_NOTICE));
-  }
+// for them give the commands of the INTERNAL copy (Greg, 2026-10-11): staff
+// who open an external page can still install. Freelance and customers get a
+// 404 from GitHub, because the channel repos control access. The command
+// block is copied from the matching internal page after the rewrite above,
+// so these pages keep /internal URLs.
+const STAFF_PAGES = [...STAFF_CHANNELS].flatMap((ch) => ['', ...PRODUCTS.map((p) => `${p.id}/`)].map((sub) => `${ch}/${sub}index.html`));
+for (const rel of STAFF_PAGES) {
+  const internalBlock = readFileSync(`${SITE}/internal/${rel}`, 'utf8').match(COMMANDS)?.[0];
+  if (!internalBlock) throw new Error(`internal/${rel} has no command block`);
+  const page = `${ext}/${rel}`;
+  writeFileSync(page, readFileSync(page, 'utf8').replace(COMMANDS, () => internalBlock));
 }
 
 // Verify the effect, not the steps.
@@ -240,15 +241,19 @@ for (const ch of CHANNELS) {
       if (!existsSync(page)) throw new Error(`${where} is missing: every page must exist in both copies`);
       const html = readFileSync(page, 'utf8');
       if (!html.includes('<img class="banner"')) throw new Error(`${where} has no SimpleMotion banner`);
-      const staffOnly = aud === 'external' && STAFF_CHANNELS.has(ch.id);
-      const hasCommands = html.includes('<pre><code>');
-      if (staffOnly === hasCommands) {
-        throw new Error(`${where}: ${staffOnly ? 'shows commands for a staff channel' : 'has no install commands'}`);
+      if (!html.includes('<pre><code>')) throw new Error(`${where} has no install commands`);
+      // Every command on a page uses one copy: the external staff pages use
+      // the internal copy, and every other page uses its own copy.
+      const want = aud === 'external' && !STAFF_CHANNELS.has(ch.id) ? 'external' : 'internal';
+      const other = want === 'internal' ? 'external' : 'internal';
+      if (!html.includes(`${DOMAIN}/${want}/`) || html.includes(`${DOMAIN}/${other}/`)) {
+        throw new Error(`${where}: its commands must use the ${want} copy only`);
       }
     }
   }
 }
-for (const file of walk(ext).filter((f) => REWRITTEN.test(f))) {
+const staffPageFiles = new Set(STAFF_PAGES.map((rel) => `${ext}/${rel}`));
+for (const file of walk(ext).filter((f) => REWRITTEN.test(f) && !staffPageFiles.has(f))) {
   if (readFileSync(file, 'utf8').includes(internalUrl)) fail(`${file} still has an internal URL`);
 }
 console.log(`built ${SITE}/internal and ${SITE}/external — ${urls} URLs changed to /external`);
