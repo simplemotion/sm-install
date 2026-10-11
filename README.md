@@ -72,11 +72,18 @@ candidate rung for both ladders.
 
 ## Channel pages
 
-Each copy always has one page per channel, with the install commands for that
-channel: `/release/`, `/preview/`, `/testing/` and `/develop/` under
-`https://install.simplemotion.dev/internal` and `/external`. On the external
-copy, the testing and develop pages show a staff-only notice instead of
-commands. The build makes the pages from `sm-channel/index.html`.
+Each copy always has one page per channel, and one page per product on each
+channel, under `https://install.simplemotion.dev/internal` and `/external`:
+
+- `/<channel>/` lists every product with its install commands.
+- `/<channel>/<product>/` gives the commands for one product, for example
+  `/release/sm-welcome/` and `/develop/sm-simplicity/`.
+
+The channels are `release`, `preview`, `testing` and `develop`. The products
+are `sm-welcome` and `sm-simplicity`. On the external copy, the testing and
+develop pages show a staff-only notice instead of commands. The build makes
+the pages from `sm-channel/index.html` and the `PRODUCTS` list in
+`sm-build.ts`.
 
 ## Install — sm-welcome (onboarding CLI)
 
