@@ -196,11 +196,12 @@ if [[ "$SM_INSTALL_AUDIENCE" == external && "$CHANNEL" != release && "$CHANNEL" 
     printf '  Staff: use the installers at %s/internal instead.\n' "https://install.simplemotion.dev" >&2
     exit 1
 fi
-# preview and release each have a public repo and a private -internal repo
-# (since 2026-10-11). A public package is on the public repo; an internal
-# package is on sm-<channel>-internal, which only staff can read. The internal
-# copy tries the public repo first, then the internal one. The external copy
-# never tries the internal one. --repo turns the fallback off.
+# Every channel has a public-path repo and a private -internal repo: two
+# discrete release paths (since 2026-10-11). A public package is on
+# sm-<channel>; an internal package is on sm-<channel>-internal, which only
+# staff can read. The internal copy tries sm-<channel> first, then the
+# -internal repo. The external copy never tries an -internal repo. --repo
+# turns the fallback off.
 REPO_FROM_FLAG=false
 [[ -n "$REPO" ]] && REPO_FROM_FLAG=true
 if [[ -z "$REPO" ]]; then
@@ -208,7 +209,7 @@ if [[ -z "$REPO" ]]; then
 fi
 INTERNAL_FALLBACK=false
 if [[ "$REPO_FROM_FLAG" == false && "$SM_INSTALL_AUDIENCE" == internal ]]; then
-    case "$CHANNEL" in preview|release) INTERNAL_FALLBACK=true ;; esac
+    INTERNAL_FALLBACK=true
 fi
 
 SOURCE_FROM_FLAG=false
