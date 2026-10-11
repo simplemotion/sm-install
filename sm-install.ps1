@@ -37,12 +37,11 @@
 #                                channel's copy (a plain copy where Windows
 #                                symlink privilege is unavailable).
 #   -Version TAG                 Pin a specific tag.
-#   -Channel release|preview|develop|testing|private
+#   -Channel release|preview|develop|testing
 #                                Default: $env:SM_CHANNEL or 'release'.
-#                                Only release is public; the rest need an
-#                                authenticated gh. 'private' is the GA channel
-#                                for products never published publicly, and
-#                                sits beside release as a second terminal.
+#                                release and preview are public; develop and
+#                                testing need an authenticated gh. The
+#                                'private' channel was removed on 2026-10-11.
 #   -AssetSuffix short|triple    Asset-name suffix style:
 #                                  short  = `<package>-win-<arch>.exe`
 #                                           (default) with arm64/x64 short
@@ -62,7 +61,7 @@ param(
     [ValidateSet('install','run','install-and-run')] [string]$Mode = 'install',
     [string]$InstallDir = '',
     [string]$Version = '',
-    [ValidateSet('release','preview','develop','testing','private')] [string]$Channel = '',
+    [ValidateSet('release','preview','develop','testing')] [string]$Channel = '',
     [ValidateSet('short','triple')] [string]$AssetSuffix = 'short',
     [string[]]$BinArgs = @()
 )
@@ -126,10 +125,8 @@ if ($SmInstallAudience -eq 'external' -and $Channel -notin @('release', 'preview
     Write-Host ("      Staff: use the installers at {0}/internal instead." -f 'https://install.simplemotion.dev')
     exit 1
 }
-# 'private' USED to be a legacy alias for develop, from when the sm-private
-# channel repo was renamed sm-develop. It is now a channel in its own right --
-# the GA terminal for products that never leave SimpleMotion -- so the alias is
-# gone rather than silently redirecting a caller to a channel they did not name.
+# The 'private' channel was removed on 2026-10-11; staff-only packages stop at
+# testing. ValidateSet above refuses it.
 # Channel -> repo defaulting. Each channel maps to its own GitHub repo.
 if (-not $Repo) { $Repo = "simplemotion/sm-$Channel" }
 if (-not $SourceRepo) { $SourceRepo = $Repo }
