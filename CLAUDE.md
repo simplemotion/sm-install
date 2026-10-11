@@ -44,6 +44,7 @@ All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enter
 - The site has two copies: `/internal` (executive and employees) and `/external` (freelance and customers, `release` and `preview` channels only).
 - The source is the internal copy. `sm-build.ts` writes the external copy: it changes each `install.simplemotion.dev/internal` URL and each audience marker (`SM_INSTALL_AUDIENCE='internal'`, `$SmInstallAudience = 'internal'`) to external. The build fails if a marker or an internal URL stays.
 - To show a staff URL in a script, split the string (for example `"%s/internal"` with the domain as the argument). If you do not, the build changes it to `/external`.
+- **Both copies always have a page for every channel**: `/internal/<channel>/` and `/external/<channel>/` for `release`, `preview`, `testing` and `develop`. These URLs are permanent. `sm-build.ts` makes them from `sm-channel/index.html` and fails if one is missing. On the external copy, the testing and develop pages show a staff-only notice instead of commands, and the build fails if they show commands. Do not remove a page to restrict a channel: change what it shows. The template is not served.
 - These URLs are permanent. Do not move them again. If the host changes, change DNS only.
 - `install.simplemotion.com` was retired on 2026-10-11, with no redirect.
 

@@ -12,7 +12,7 @@
 // Run with Node >= 24 (strips TS types natively): `node sm-build.ts`.
 
 import { buildSync } from 'esbuild';
-import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SITE = '_site';
@@ -77,6 +77,36 @@ for (const { dir, entry, placeholder } of PAGES) {
   console.log(`built ${dir}/index.html — inlined ${js.length} bytes of minified JS`);
 }
 
+// 2b. One page per channel, from the sm-channel/ template: /<channel>/ lists
+//     the install commands for that channel. The template is not served.
+const CHANNELS = [
+  { id: 'release', title: 'Release', summary: 'Stable production builds. Open to everyone.' },
+  { id: 'preview', title: 'Preview', summary: 'The next release, before it is final. Open to everyone.' },
+  { id: 'testing', title: 'Testing', summary: 'In-flight test builds. SimpleMotion staff only.' },
+  { id: 'develop', title: 'Develop', summary: 'The earliest development builds. SimpleMotion staff only.' },
+];
+const STAFF_CHANNELS = new Set(['testing', 'develop']);
+const COMMANDS = /<!--SM_COMMANDS_BEGIN-->[\s\S]*<!--SM_COMMANDS_END-->/;
+{
+  const tmpl = readFileSync(`${TREE}/sm-channel/index.html`, 'utf8');
+  if (!COMMANDS.test(tmpl)) throw new Error('sm-channel/index.html has no SM_COMMANDS markers');
+  for (const ch of CHANNELS) {
+    const nav = CHANNELS.map(
+      (c) => `<a href="../${c.id}/"${c.id === ch.id ? ' class="active" aria-current="page"' : ''}>${c.title}</a>`,
+    ).join('');
+    const html = tmpl
+      .split('{{CHANNEL_TITLE}}').join(ch.title)
+      .split('{{CHANNEL_SUMMARY}}').join(ch.summary)
+      .split('{{CHANNEL_NAV}}').join(nav)
+      .split('{{CHANNEL}}').join(ch.id);
+    if (html.includes('{{')) throw new Error(`channel page ${ch.id} has an unfilled placeholder`);
+    mkdirSync(`${TREE}/${ch.id}`, { recursive: true });
+    writeFileSync(`${TREE}/${ch.id}/index.html`, html);
+  }
+  rmSync(`${TREE}/sm-channel`, { recursive: true, force: true });
+  console.log(`built ${CHANNELS.length} channel pages`);
+}
+
 // 3. Write the tree once per audience.
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap((e) => {
@@ -114,6 +144,18 @@ for (const file of walk(ext)) {
   writeFileSync(file, text);
 }
 
+// The external installer refuses the staff channels, so the external pages
+// for them show a notice instead of commands. The notice names no URL: the
+// rewrite above would change an /internal URL to /external.
+const STAFF_NOTICE = `<div class="notice">This channel is for SimpleMotion staff (the executive and
+  employees cohorts) only. Staff use the internal copy of the installer site. The
+  <a href="https://github.com/simplemotion/sm-install#readme">sm-install README</a> gives its address.</div>`;
+for (const ch of STAFF_CHANNELS) {
+  const page = `${ext}/${ch}/index.html`;
+  const html = readFileSync(page, 'utf8');
+  writeFileSync(page, html.replace(COMMANDS, STAFF_NOTICE));
+}
+
 // Verify the effect, not the steps.
 const fail = (msg: string): never => {
   throw new Error(`external copy: ${msg}`);
@@ -126,6 +168,20 @@ for (const name of MARKED) {
 for (const dir of PAGE_DIRS) {
   const html = readFileSync(`${ext}/${dir}/index.html`, 'utf8');
   if (!html.includes(externalUrl)) fail(`${dir}/index.html has no external base`);
+}
+// Every channel has a page in BOTH copies, always: /internal/<channel>/ and
+// /external/<channel>/ are permanent URLs. A missing page fails the build.
+for (const ch of CHANNELS) {
+  for (const aud of ['internal', 'external']) {
+    const page = `${SITE}/${aud}/${ch.id}/index.html`;
+    if (!existsSync(page)) throw new Error(`${aud}/${ch.id}/ is missing: every channel must have a page in both copies`);
+    const html = readFileSync(page, 'utf8');
+    const staffOnly = aud === 'external' && STAFF_CHANNELS.has(ch.id);
+    const hasCommands = html.includes(`--channel ${ch.id}`);
+    if (staffOnly === hasCommands) {
+      throw new Error(`${aud}/${ch.id}: ${staffOnly ? 'shows commands for a staff channel' : 'has no install commands'}`);
+    }
+  }
 }
 for (const file of walk(ext).filter((f) => REWRITTEN.test(f))) {
   if (readFileSync(file, 'utf8').includes(internalUrl)) fail(`${file} still has an internal URL`);

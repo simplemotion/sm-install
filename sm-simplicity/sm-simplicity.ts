@@ -40,13 +40,12 @@ const EXTERNAL = SM_INSTALL_BASE.endsWith('/external');
   // simplemotion.com / simplemotion.global accounts. Others see them
   // disabled with an explanatory tooltip.
   // The external copy serves the freelance and customers cohorts, which can
-  // read the release and preview channels only, so it shows no other channel.
+  // read the release and preview channels only. It shows Testing and Develop,
+  // but they stay disabled whatever the email address is.
   if (EXTERNAL) {
-    document
-      .querySelectorAll<HTMLButtonElement>(
-        '.channel-btn:not([data-channel="release"]):not([data-channel="preview"])',
-      )
-      .forEach((b) => b.remove());
+    for (const id of ['testing-btn', 'develop-btn']) {
+      byId(id)?.setAttribute('title', 'Staff only: use the internal installer site');
+    }
   }
   const internalAllowed =
     !EXTERNAL && /@(simplemotion\.com|simplemotion\.global)$/i.test(email);

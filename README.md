@@ -70,6 +70,14 @@ is explicitly listed as public-eligible. `sm-private` carries finalised
 `vX.Y.Z` only; there is no `-private-NNN` stage, because `testing` is the
 candidate rung for both ladders.
 
+## Channel pages
+
+Each copy always has one page per channel, with the install commands for that
+channel: `/release/`, `/preview/`, `/testing/` and `/develop/` under
+`https://install.simplemotion.dev/internal` and `/external`. On the external
+copy, the testing and develop pages show a staff-only notice instead of
+commands. The build makes the pages from `sm-channel/index.html`.
+
 ## Install — sm-welcome (onboarding CLI)
 
 ### macOS / Linux
