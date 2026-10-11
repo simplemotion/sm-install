@@ -88,7 +88,13 @@ const CHANNELS = [
 const STAFF_CHANNELS = new Set(['testing', 'develop']);
 const COMMANDS = /<!--SM_COMMANDS_BEGIN-->[\s\S]*<!--SM_COMMANDS_END-->/;
 {
-  const tmpl = readFileSync(`${TREE}/sm-channel/index.html`, 'utf8');
+  // The SimpleMotion banner, copied from the welcome page so that the site
+  // holds one copy of the image.
+  const banner = readFileSync(`${TREE}/sm-welcome/index.html`, 'utf8').match(/<img class="banner"[^>]*>/)?.[0];
+  if (!banner) throw new Error('sm-welcome/index.html has no <img class="banner">');
+  const raw = readFileSync(`${TREE}/sm-channel/index.html`, 'utf8');
+  if (!raw.includes('<!--SM_BANNER-->')) throw new Error('sm-channel/index.html has no SM_BANNER marker');
+  const tmpl = raw.replace('<!--SM_BANNER-->', banner);
   if (!COMMANDS.test(tmpl)) throw new Error('sm-channel/index.html has no SM_COMMANDS markers');
   for (const ch of CHANNELS) {
     const nav = CHANNELS.map(
@@ -176,6 +182,7 @@ for (const ch of CHANNELS) {
     const page = `${SITE}/${aud}/${ch.id}/index.html`;
     if (!existsSync(page)) throw new Error(`${aud}/${ch.id}/ is missing: every channel must have a page in both copies`);
     const html = readFileSync(page, 'utf8');
+    if (!html.includes('<img class="banner"')) throw new Error(`${aud}/${ch.id}/ has no SimpleMotion banner`);
     const staffOnly = aud === 'external' && STAFF_CHANNELS.has(ch.id);
     const hasCommands = html.includes(`--channel ${ch.id}`);
     if (staffOnly === hasCommands) {
