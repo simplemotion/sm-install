@@ -237,7 +237,7 @@ fi
 SKIP_DOWNLOAD=0
 LOCAL_VER=""
 case "$CHANNEL_VAL" in
-    release|preview|develop|testing) CHANNEL_REPO="simplemotion/sm-${CHANNEL_VAL}"; STORE_CHANNEL="$CHANNEL_VAL" ;;
+    release|preview|develop|testing) CHANNEL_REPO="simplemotion/sm-${CHANNEL_VAL}-external"; STORE_CHANNEL="$CHANNEL_VAL" ;;
     # 'private' is deliberately absent. It was a legacy alias for develop until
     # 2026-08-19 and is now the GA terminal for products that never leave
     # SimpleMotion — which sm-welcome, being public-eligible, can never be on.

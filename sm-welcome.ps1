@@ -298,10 +298,10 @@ $latestVer = $null
 $channelRepo  = $null
 $storeChannel = $null
 switch ($channel) {
-    'release' { $channelRepo = 'simplemotion/sm-release'; $storeChannel = 'release' }
-    'preview' { $channelRepo = 'simplemotion/sm-preview'; $storeChannel = 'preview' }
-    'develop' { $channelRepo = 'simplemotion/sm-develop'; $storeChannel = 'develop' }
-    'testing' { $channelRepo = 'simplemotion/sm-testing'; $storeChannel = 'testing' }
+    'release' { $channelRepo = 'simplemotion/sm-release-external'; $storeChannel = 'release' }
+    'preview' { $channelRepo = 'simplemotion/sm-preview-external'; $storeChannel = 'preview' }
+    'develop' { $channelRepo = 'simplemotion/sm-develop-external'; $storeChannel = 'develop' }
+    'testing' { $channelRepo = 'simplemotion/sm-testing-external'; $storeChannel = 'testing' }
 }
 $storeBin = if ($storeChannel) { Join-Path $HOME (".simplemotion\share\{0}\sm-welcome.exe" -f $storeChannel) } else { $null }
 if (-not $env:SM_WELCOME_SKIP_FAST_PATH -and $storeBin -and (Test-Path $storeBin)) {
