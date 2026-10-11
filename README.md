@@ -72,7 +72,7 @@ candidate rung for both ladders.
 
 ## Channel pages
 
-Each copy has one page per channel, with the install commands for that
+Each copy always has one page per channel, with the install commands for that
 channel: `/release/`, `/preview/`, `/testing/` and `/develop/` under
 `https://install.simplemotion.dev/internal` and `/external`. On the external
 copy, the testing and develop pages show a staff-only notice instead of

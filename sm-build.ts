@@ -12,7 +12,7 @@
 // Run with Node >= 24 (strips TS types natively): `node sm-build.ts`.
 
 import { buildSync } from 'esbuild';
-import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SITE = '_site';
@@ -169,9 +169,13 @@ for (const dir of PAGE_DIRS) {
   const html = readFileSync(`${ext}/${dir}/index.html`, 'utf8');
   if (!html.includes(externalUrl)) fail(`${dir}/index.html has no external base`);
 }
+// Every channel has a page in BOTH copies, always: /internal/<channel>/ and
+// /external/<channel>/ are permanent URLs. A missing page fails the build.
 for (const ch of CHANNELS) {
   for (const aud of ['internal', 'external']) {
-    const html = readFileSync(`${SITE}/${aud}/${ch.id}/index.html`, 'utf8');
+    const page = `${SITE}/${aud}/${ch.id}/index.html`;
+    if (!existsSync(page)) throw new Error(`${aud}/${ch.id}/ is missing: every channel must have a page in both copies`);
+    const html = readFileSync(page, 'utf8');
     const staffOnly = aud === 'external' && STAFF_CHANNELS.has(ch.id);
     const hasCommands = html.includes(`--channel ${ch.id}`);
     if (staffOnly === hasCommands) {
