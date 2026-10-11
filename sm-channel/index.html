@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SimpleMotion - {{CHANNEL_TITLE}} channel</title>
+<meta name="description" content="Install commands for the SimpleMotion {{CHANNEL}} channel">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0a0a0a;color:#e8e8e8;font-family:'Noto Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .card{max-width:774px;width:100%;padding:40px;background:#1a1a1a;border-radius:12px}
+  h1{font-size:1.5rem;font-weight:400;margin-bottom:8px}
+  h1 .ch{color:#ff6900;font-weight:600}
+  .subtitle{color:#999;font-size:0.95rem;margin-bottom:24px;line-height:1.5}
+  .nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:28px}
+  .nav a{color:#999;text-decoration:none;padding:6px 14px;border:1px solid #2a2a2a;border-radius:4px;font-size:0.8rem}
+  .nav a.active{background:#ff6900;border-color:#ff6900;color:#fff}
+  h2{font-size:1.05rem;font-weight:600;margin:24px 0 8px}
+  .os{color:#999;font-size:0.8rem;margin:12px 0 4px}
+  pre{background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:12px 16px;overflow-x:auto}
+  code{font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:0.82rem;color:#e8e8e8}
+  .notice{background:#0a0a0a;border:1px solid #2a2a2a;border-left:3px solid #ff6900;border-radius:8px;padding:16px;color:#999;line-height:1.6}
+  .notice a,.footer a{color:#ff6900;text-decoration:none}
+  .footer{margin-top:32px;color:#666;font-size:0.8rem;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1><span class="ch">{{CHANNEL_TITLE}}</span> channel</h1>
+  <p class="subtitle">{{CHANNEL_SUMMARY}}</p>
+  <nav class="nav" aria-label="Channels">{{CHANNEL_NAV}}</nav>
+<!--SM_COMMANDS_BEGIN-->
+  <h2>sm-welcome (onboarding)</h2>
+  <p class="os">macOS / Linux</p>
+  <pre><code>bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome --channel {{CHANNEL}}</code></pre>
+  <p class="os">Windows (PowerShell)</p>
+  <pre><code>$env:SM_CHANNEL='{{CHANNEL}}'; irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex</code></pre>
+
+  <h2>sm-simplicity</h2>
+  <p class="os">macOS / Linux</p>
+  <pre><code>SM_CHANNEL={{CHANNEL}} bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-simplicity.sh)" sm-simplicity</code></pre>
+  <p class="os">Windows (PowerShell)</p>
+  <pre><code>$env:SM_CHANNEL='{{CHANNEL}}'; irm https://install.simplemotion.dev/internal/sm-simplicity.ps1 | iex</code></pre>
+<!--SM_COMMANDS_END-->
+  <p class="footer">Each installer checks the SHA256 and the build attestation of every file before it installs it.<br>
+  Source: <a href="https://github.com/simplemotion/sm-install#readme">simplemotion/sm-install</a></p>
+</div>
+</body>
+</html>
