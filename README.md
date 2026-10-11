@@ -21,27 +21,25 @@ Binaries themselves live in channel-specific repos:
 | Channel | Repo | Visibility | Audience |
 |---|---|---|---|
 | `release` | [simplemotion/sm-release](https://github.com/simplemotion/sm-release) | public | All consumers — stable production builds |
-| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | private | Early access to the next public GA — all cohorts |
+| `preview` | [simplemotion/sm-preview](https://github.com/simplemotion/sm-preview) | public | Early access to the next public GA — all consumers |
 | `develop` | [simplemotion/sm-develop](https://github.com/simplemotion/sm-develop) | staff | Earliest development builds |
 | `testing` | [simplemotion/sm-testing](https://github.com/simplemotion/sm-testing) | staff | In-flight test builds |
 | `private` | [simplemotion/sm-private](https://github.com/simplemotion/sm-private) | staff | **GA** builds of products that are never published publicly |
 
 Each channel repo has its own `releases/latest` namespace, so channel selection is unambiguous and there's no prerelease-flag coordination required.
 
-**Only `release` is open.** Every other channel is a private repo reachable by
-named teams:
+**`release` and `preview` are public** (`preview` since 2026-10-11). The other
+channels are private repos reachable by named teams:
 
-| Channel | Teams with read access |
+| Channel | Read access |
 |---|---|
-| `preview` | `ent:sm-executive`, `ent:sm-employees`, `ent:sm-freelance`, `ent:sm-customers` |
+| `release`, `preview` | Anyone, no account |
 | `develop`, `testing`, `private` | `ent:sm-executive`, `ent:sm-employees` |
 
-The executive and employees cohorts can read every channel. The freelance and
-customers cohorts can read `release` and `preview` only.
-
-`preview` carries public-eligible packages only (since 2026-10-11). A
-staff-only package goes from `testing` to `private` and never goes to
-`preview`. `3400-9993-SM-Publish` enforces this.
+`preview` carries public-eligible packages only. A staff-only package goes from
+`testing` to `private` and never goes to `preview`. `3400-9993-SM-Publish`
+enforces this, and a promotion to `preview` needs two admin approvals, as a
+promotion to `release` does.
 
 `release` stays public on purpose: it is what a fresh machine bootstraps
 `sm-welcome` from, before it has `gh` or a token at all.
@@ -126,7 +124,7 @@ Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_D
 | Selector | Resolves to |
 |---|---|
 | `--channel release` (default) or `SM_CHANNEL=release` | newest release on `simplemotion/sm-release` |
-| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` (not public — requires authed `gh` and staff membership) |
+| `--channel preview` or `SM_CHANNEL=preview` | newest release on `simplemotion/sm-preview` (public, no account needed) |
 | `--channel develop` or `SM_CHANNEL=develop` | newest release on `simplemotion/sm-develop` (not public — requires authed `gh` with read access) |
 | `--channel testing` or `SM_CHANNEL=testing` | newest release on `simplemotion/sm-testing` (not public — requires authed `gh`) |
 | `--channel private` or `SM_CHANNEL=private` | newest GA release on `simplemotion/sm-private` (not public — requires authed `gh`) |
