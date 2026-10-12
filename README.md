@@ -6,14 +6,14 @@ This repo is the public bootstrap entry point. It serves two copies of the insta
 
 | URL | Audience | Channels | Served by |
 |---|---|---|---|
-| `https://install.simplemotion.dev` | Executive and employees cohorts | All | This repo |
-| `https://install.simplemotion.com` | Freelance and customers cohorts | `release` and `preview` | [simplemotion/sm-install-ext](https://github.com/simplemotion/sm-install-ext) |
+| `https://install.simplemotion.dev` | Executive and employees cohorts | All | Azure Static Web App `sm-portal-install-int` |
+| `https://install.simplemotion.com` | Freelance and customers cohorts | `release` and `preview` | Azure Static Web App `sm-portal-install-ext` |
 
 The two copies come from the same source, in this repo. The build writes the
 external copy with `install.simplemotion.com` URLs, and its installer stops
 when you ask for a channel other than `release` or `preview`. That stop is
-guidance only: the channel repos control access. `sm-install-ext` holds no
-source. Each deploy replaces its `gh-pages` branch.
+guidance only: the channel repos control access. Each push to `main` deploys
+both copies.
 
 **Do not copy these URLs into other repos.** Link to this README in docs. Rust
 code gets the URL from the `sm-install-url` crate in `3400-0001-SM-Core`.
