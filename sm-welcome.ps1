@@ -2,11 +2,11 @@
 # Thin wrapper around sm-install.ps1 - fetches sm-welcome and execs it.
 #
 # Usage:
-#   irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex
-#   $env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex
+#   irm https://install.simplemotion.dev/sm-welcome.ps1 | iex
+#   $env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/sm-welcome.ps1 | iex
 #
 # Clean re-install:
-#   $env:SM_WELCOME_CLEAN=1; irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex
+#   $env:SM_WELCOME_CLEAN=1; irm https://install.simplemotion.dev/sm-welcome.ps1 | iex
 # Wipes ~/.local, ~/.simplemotion, and ~/.sm-welcome.toml before Section 1,
 # so the toolchain, sm-welcome install, sigstore TUF cache, and the
 # binary's step-tracker are all rebuilt from scratch. `irm | iex` doesn't
@@ -57,10 +57,9 @@ $ErrorActionPreference = 'Stop'
 # Bash side, added in sm-install#86 after a merge raced its own Pages deploy and
 # tested a new script against the previously-deployed library. Defaults to
 # production, so every documented one-liner is unaffected.
-# The audience of this copy. sm-build.ts writes 'external' here in the copy
-# that it serves from /external. The served path sets it, not the environment.
-$SmInstallAudience = 'internal'
-$SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { "https://install.simplemotion.dev/$SmInstallAudience" }
+# sm-build.ts writes the external domain here in the external copy. The
+# fetched sm-install script carries the audience marker.
+$SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { "https://install.simplemotion.dev" }
 
 # Read a sibling script from the base. A base that does not look like a URL is
 # treated as a directory, which is what CI uses so the checked-out script and

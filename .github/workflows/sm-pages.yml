@@ -1,6 +1,12 @@
 name: sm-pages
 
-# Build + deploy install.simplemotion.dev via GitHub Actions Pages.
+# Build the two installer sites from one source and deploy them:
+#   install.simplemotion.dev  internal copy, this repo's Pages (Actions deploy)
+#   install.simplemotion.com  external copy, the gh-pages branch of
+#                             simplemotion/sm-install-ext (branch build)
+# GitHub Pages gives each repo one custom domain, so the external copy needs
+# its own repo. sm-install-ext holds no source: each deploy replaces its
+# gh-pages branch with one commit.
 # The welcome page's interactive logic is authored in TypeScript
 # (sm-welcome/sm-welcome.ts), bundled + minified by esbuild and inlined
 # into the served HTML by sm-build.ts. No hand-written .js is committed.
@@ -30,12 +36,18 @@ jobs:
       - run: npm ci
       - name: Type-check
         run: npm run typecheck
-      - name: Build _site (esbuild + inline)
+      - name: Build _site/int and _site/ext (esbuild + inline)
         run: npm run build
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: _site
+          path: _site/int
+      - uses: actions/upload-artifact@v7
+        with:
+          name: site-ext
+          path: _site/ext
+          include-hidden-files: true
+          if-no-files-found: error
 
   deploy:
     needs: build
@@ -46,3 +58,62 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  deploy-ext:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Decode bridge App PEM
+        id: decode-pem
+        env:
+          PEM_WRAPPED: ${{ secrets.BRIDGE_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          val="${PEM_WRAPPED#b64:}"
+          if [[ "$val" == "$PEM_WRAPPED" ]]; then
+            echo "::error::BRIDGE_APP_PRIVATE_KEY is missing the 'b64:' prefix." >&2
+            exit 1
+          fi
+          pem=$(printf '%s' "$val" | base64 -d)
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::add-mask::$line"
+          done <<< "$pem"
+          {
+            echo 'pem<<__END_OF_PEM__'
+            printf '%s\n' "$pem"
+            echo '__END_OF_PEM__'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mint bridge token (write sm-install-ext)
+        id: token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.BRIDGE_APP_CLIENT_ID }}
+          private-key: ${{ steps.decode-pem.outputs.pem }}
+          owner: simplemotion
+          repositories: sm-install-ext
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: site-ext
+          path: site-ext
+
+      - name: Replace the gh-pages branch of sm-install-ext
+        env:
+          TOKEN: ${{ steps.token.outputs.token }}
+          SRC: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          cd site-ext
+          test "$(cat CNAME)" = install.simplemotion.com
+          git init -q -b gh-pages
+          git config user.name 'sm-binary-bridge[bot]'
+          git config user.email 'sm-binary-bridge[bot]@users.noreply.github.com'
+          git add -A
+          git commit -q -m "Deploy the external installer site from simplemotion/sm-install-int@${SRC}"
+          git push -f "https://x-access-token:${TOKEN}@github.com/simplemotion/sm-install-ext.git" gh-pages
+          # Verify the effect: the remote branch now holds this commit.
+          want=$(git rev-parse HEAD)
+          got=$(git ls-remote "https://x-access-token:${TOKEN}@github.com/simplemotion/sm-install-ext.git" refs/heads/gh-pages | cut -f1)
+          test "$want" = "$got"
+          echo "::notice::sm-install-ext gh-pages is ${got}"

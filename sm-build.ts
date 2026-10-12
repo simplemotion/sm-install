@@ -1,13 +1,15 @@
-// Build step for install.simplemotion.dev (Pages, Actions deploy).
+// Build step for the two installer sites (Pages):
+// install.simplemotion.dev (internal) and install.simplemotion.com (external).
 //
 // 1. esbuild bundles + minifies each page's .ts entry into an IIFE.
 // 2. The served tree is assembled once, with each page's
 //    <!--SM_*_SCRIPT--> placeholder replaced by its inlined bundle.
 //    No .js is committed; the browser-served script is build output.
-// 3. The tree is written twice, as _site/internal/ and _site/external/.
-//    The source is the internal copy. In the external copy the build
-//    changes each /internal URL to /external and each audience marker
-//    to 'external'. The build fails if the count of changes is wrong.
+// 3. The build writes the tree twice, as _site/int/ and _site/ext/. Each is
+//    the root of its own domain. The source is the internal copy. In the
+//    external copy the build changes each internal domain to the external
+//    domain and each audience marker to 'external'. The build fails if a
+//    change is missing.
 //
 // Run with Node >= 24 (strips TS types natively): `node sm-build.ts`.
 
@@ -18,7 +20,15 @@ import { join } from 'node:path';
 const SITE = '_site';
 // The assembled tree, before it is written out per audience.
 const TREE = `${SITE}/.tree`;
-const DOMAIN = 'install.simplemotion.dev';
+// The internal copy: executive and employees, every channel. Served by
+// this repo's Pages site.
+const INT_DOMAIN = 'install.simplemotion.dev';
+// The external copy: freelance and customers, release and preview only.
+// Served by the Pages site of simplemotion/sm-install-ext.
+const EXT_DOMAIN = 'install.simplemotion.com';
+// The checks below match the whole origin, not the bare host.
+const INT_ORIGIN = `https://${INT_DOMAIN}`;
+const EXT_ORIGIN = `https://${EXT_DOMAIN}`;
 
 // The interactive pages: each has a dir with index.html (carrying the
 // placeholder) and a same-named .ts entry that gets bundled + inlined.
@@ -89,8 +99,8 @@ const CHANNELS = [
 ];
 const STAFF_CHANNELS = new Set(['testing', 'develop']);
 // The products that the installer site installs. The base is the internal
-// copy; step 3 changes it to /external in the external copy.
-const BASE = `https://${DOMAIN}/internal`;
+// copy; step 3 changes it to the external domain in the external copy.
+const BASE = INT_ORIGIN;
 const PRODUCTS = [
   {
     id: 'sm-welcome',
@@ -173,47 +183,50 @@ const walk = (dir: string): string[] =>
     return statSync(p).isDirectory() ? walk(p) : [p];
   });
 
-// The audience markers. Each script that fetches a sibling carries exactly one.
+// The audience markers. The installer base carries exactly one in each
+// language. The wrappers carry none: they run the sm-install script of their
+// own copy, so they get its audience.
 const MARKERS: [RegExp, string][] = [
   [/^SM_INSTALL_AUDIENCE='internal'$/m, "SM_INSTALL_AUDIENCE='external'"],
   [/^\$SmInstallAudience = 'internal'$/m, "$SmInstallAudience = 'external'"],
 ];
-const MARKED = [
-  'sm-install.sh', 'sm-welcome.sh', 'sm-simplicity.sh',
-  'sm-install.ps1', 'sm-welcome.ps1', 'sm-simplicity.ps1',
-];
+const MARKED = ['sm-install.sh', 'sm-install.ps1'];
 const PAGE_DIRS = PAGES.map((p) => p.dir);
 
-cpSync(TREE, `${SITE}/internal`, { recursive: true });
-cpSync(TREE, `${SITE}/external`, { recursive: true });
+const INT = `${SITE}/int`;
+const EXT = `${SITE}/ext`;
+cpSync(TREE, INT, { recursive: true });
+cpSync(TREE, EXT, { recursive: true });
 rmSync(TREE, { recursive: true, force: true });
 
-const ext = `${SITE}/external`;
 // Scripts and pages only. The served docs describe both copies, so they stay as written.
 const REWRITTEN = /\.(sh|ps1|html)$/;
-const internalUrl = `${DOMAIN}/internal`;
-const externalUrl = `${DOMAIN}/external`;
 let urls = 0;
-for (const file of walk(ext)) {
+for (const file of walk(EXT)) {
   if (!REWRITTEN.test(file)) continue;
   let text = readFileSync(file, 'utf8');
-  urls += text.split(internalUrl).length - 1;
-  text = text.split(internalUrl).join(externalUrl);
+  urls += text.split(INT_DOMAIN).length - 1;
+  text = text.split(INT_DOMAIN).join(EXT_DOMAIN);
   for (const [re, to] of MARKERS) text = text.replace(re, to);
   writeFileSync(file, text);
 }
+// The external site is a branch build in sm-install-ext, so it carries its
+// own CNAME and turns Jekyll off. The internal site is an Actions deploy, and
+// Pages takes its domain from the repo settings.
+writeFileSync(`${EXT}/CNAME`, `${EXT_DOMAIN}\n`);
+writeFileSync(`${EXT}/.nojekyll`, '');
 
 // The external installer refuses the staff channels, so the external pages
 // for them give the commands of the INTERNAL copy (Greg, 2026-10-11): staff
 // who open an external page can still install. Freelance and customers get a
 // 404 from GitHub, because the channel repos control access. The command
 // block is copied from the matching internal page after the rewrite above,
-// so these pages keep /internal URLs.
+// so these pages keep internal URLs.
 const STAFF_PAGES = [...STAFF_CHANNELS].flatMap((ch) => ['', ...PRODUCTS.map((p) => `${p.id}/`)].map((sub) => `${ch}/${sub}index.html`));
 for (const rel of STAFF_PAGES) {
-  const internalBlock = readFileSync(`${SITE}/internal/${rel}`, 'utf8').match(COMMANDS)?.[0];
-  if (!internalBlock) throw new Error(`internal/${rel} has no command block`);
-  const page = `${ext}/${rel}`;
+  const internalBlock = readFileSync(`${INT}/${rel}`, 'utf8').match(COMMANDS)?.[0];
+  if (!internalBlock) throw new Error(`int/${rel} has no command block`);
+  const page = `${EXT}/${rel}`;
   writeFileSync(page, readFileSync(page, 'utf8').replace(COMMANDS, () => internalBlock));
 }
 
@@ -222,22 +235,23 @@ const fail = (msg: string): never => {
   throw new Error(`external copy: ${msg}`);
 };
 for (const name of MARKED) {
-  const text = readFileSync(`${ext}/${name}`, 'utf8');
+  const text = readFileSync(`${EXT}/${name}`, 'utf8');
   if (MARKERS.some(([re]) => re.test(text))) fail(`${name} still has the internal marker`);
   if (!text.includes("'external'")) fail(`${name} has no external marker`);
 }
 for (const dir of PAGE_DIRS) {
-  const html = readFileSync(`${ext}/${dir}/index.html`, 'utf8');
-  if (!html.includes(externalUrl)) fail(`${dir}/index.html has no external base`);
+  const html = readFileSync(`${EXT}/${dir}/index.html`, 'utf8');
+  if (!html.includes(EXT_ORIGIN)) fail(`${dir}/index.html has no external base`);
 }
 // Every channel, and every product on every channel, has a page in BOTH
-// copies, always: /internal/<channel>/[<product>/] and /external/... are
-// permanent URLs. A missing page fails the build.
+// copies, always: <domain>/<channel>/[<product>/] are permanent URLs on
+// both domains. A missing page fails the build.
+const ORIGINS = { internal: INT_ORIGIN, external: EXT_ORIGIN };
 for (const ch of CHANNELS) {
-  for (const aud of ['internal', 'external']) {
+  for (const aud of ['internal', 'external'] as const) {
     for (const sub of ['', ...PRODUCTS.map((p) => `${p.id}/`)]) {
-      const page = `${SITE}/${aud}/${ch.id}/${sub}index.html`;
-      const where = `${aud}/${ch.id}/${sub}`;
+      const page = `${aud === 'internal' ? INT : EXT}/${ch.id}/${sub}index.html`;
+      const where = `${ORIGINS[aud]}/${ch.id}/${sub}`;
       if (!existsSync(page)) throw new Error(`${where} is missing: every page must exist in both copies`);
       const html = readFileSync(page, 'utf8');
       if (!html.includes('<img class="banner"')) throw new Error(`${where} has no SimpleMotion banner`);
@@ -246,14 +260,18 @@ for (const ch of CHANNELS) {
       // the internal copy, and every other page uses its own copy.
       const want = aud === 'external' && !STAFF_CHANNELS.has(ch.id) ? 'external' : 'internal';
       const other = want === 'internal' ? 'external' : 'internal';
-      if (!html.includes(`${DOMAIN}/${want}/`) || html.includes(`${DOMAIN}/${other}/`)) {
+      if (!html.includes(`${ORIGINS[want]}/`) || html.includes(`${ORIGINS[other]}/`)) {
         throw new Error(`${where}: its commands must use the ${want} copy only`);
       }
     }
   }
 }
-const staffPageFiles = new Set(STAFF_PAGES.map((rel) => `${ext}/${rel}`));
-for (const file of walk(ext).filter((f) => REWRITTEN.test(f) && !staffPageFiles.has(f))) {
-  if (readFileSync(file, 'utf8').includes(internalUrl)) fail(`${file} still has an internal URL`);
+const staffPageFiles = new Set(STAFF_PAGES.map((rel) => `${EXT}/${rel}`));
+for (const file of walk(EXT).filter((f) => REWRITTEN.test(f) && !staffPageFiles.has(f))) {
+  if (readFileSync(file, 'utf8').includes(INT_ORIGIN)) fail(`${file} still has an internal URL`);
 }
-console.log(`built ${SITE}/internal and ${SITE}/external — ${urls} URLs changed to /external`);
+// The internal copy names no external URL: the rewrite runs one way only.
+for (const file of walk(INT).filter((f) => REWRITTEN.test(f))) {
+  if (readFileSync(file, 'utf8').includes(EXT_ORIGIN)) throw new Error(`internal copy: ${file} has an external URL`);
+}
+console.log(`built ${INT} (${INT_DOMAIN}) and ${EXT} (${EXT_DOMAIN}) — ${urls} URLs changed to the external domain`);

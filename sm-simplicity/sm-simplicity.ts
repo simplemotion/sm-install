@@ -1,4 +1,4 @@
-// install.simplemotion.dev/internal/sm-simplicity/ setup page — interactive logic.
+// install.simplemotion.dev/sm-simplicity/ setup page — interactive logic.
 //
 // Sibling of sm-welcome/sm-welcome.ts (same card UX: ?name= greeting,
 // ?email=-gated internal channels, OS detection, copy button); only the
@@ -19,10 +19,10 @@ interface CmdParts {
   tail: string;
 }
 
-// The base of this copy of the site. sm-build.ts writes /external here in the
-// copy that it serves from /external.
-const SM_INSTALL_BASE = 'https://install.simplemotion.dev/internal';
-const EXTERNAL = SM_INSTALL_BASE.endsWith('/external');
+// The base of this copy of the site. sm-build.ts writes the external domain
+// here in the copy that it serves from the external domain.
+const SM_INSTALL_BASE = 'https://install.simplemotion.dev';
+const EXTERNAL = SM_INSTALL_BASE.endsWith('.com');
 
 (function () {
   const params = new URLSearchParams(window.location.search);
