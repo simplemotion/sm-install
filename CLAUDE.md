@@ -12,8 +12,8 @@ This repo contains **no binaries**. It is the routing layer between consumers an
 
 | Repo | Visibility | Role |
 |---|---|---|
-| `simplemotion/sm-install-int` (this) | public | Installer source + Pages for `install.simplemotion.dev` |
-| `simplemotion/sm-install-ext` | public | Pages for `install.simplemotion.com`, deployed from this repo |
+| `simplemotion/sm-install-int` (this) | public | Installer source; deploys both installer sites |
+| `simplemotion/sm-install-ext` | public, archived | The external Pages site until 2026-10-12 |
 | `simplemotion/sm-release-external` | public | Production binaries |
 | `simplemotion/sm-preview-external` | public | Preview / beta binaries |
 | `simplemotion/sm-develop-external` | private | Development — earliest builds |
@@ -44,30 +44,21 @@ All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enter
 - **Channel set is closed**: `release`, `preview`, `develop`, `testing`. Adding a fifth channel requires creating a new channel repo and updating both `install.{sh,ps1}` and the source-repo dispatch routing.
 - **Versioning follows the SimpleMotion enterprise policy** (see appendix in `CHANGE.md`).
 
-## DNS / Pages
+## Hosting and DNS
 
-**Move to Azure Static Web Apps (Greg, 2026-10-12).** Each copy now also deploys to its own SWA in `rg-sm-portal-se` (subscription SimpleMotion.Entertainment), beside the sm-website SWAs:
+Each copy is its own Azure Static Web App (Greg, 2026-10-12). Both are in `rg-sm-portal-se` (subscription SimpleMotion.Entertainment), beside the sm-website SWAs.
 
-| Copy | SWA | Default host |
-|---|---|---|
-| Internal | `sm-portal-install-int` | `gray-island-0ee6aea00.5.azurestaticapps.net` |
-| External | `sm-portal-install-ext` | `lively-water-02e6ddc00.5.azurestaticapps.net` |
-
-- The `deploy-swa` job logs in with OIDC as the `sm-deploy-portal` app, which trusts this repo's `main` branch. It fetches each SWA's deploy token, deploys, and then fails if the SWA does not serve this build's `sm-install.sh`.
-- One SWA cannot serve different content for each host name, so each copy needs its own SWA.
-- `sm-build.ts` writes `staticwebapp.config.json` into each copy. It keeps the MIME types that Pages served, but serves `.ps1` as text.
-- The two domains move to the SWAs in DNS. A TXT record validates each domain first, and then the CNAME changes. After that, a second change removes the Pages jobs and archives `sm-install-ext`. Until then, the Pages notes below stay correct.
-
-There are two GitHub Pages sites, one for each domain, because Pages gives each repo one custom domain (Greg, 2026-10-12):
-
-| Domain | Copy | Repo | Deploy |
+| Domain | Copy | SWA | Default host |
 |---|---|---|---|
-| `install.simplemotion.dev` | Internal: executive and employees, every channel | this repo | Actions deploy of `_site/int` |
-| `install.simplemotion.com` | External: freelance and customers, `release` and `preview` only | `simplemotion/sm-install-ext` | Branch build of `gh-pages`, which `sm-pages.yml` replaces with `_site/ext` |
+| `install.simplemotion.dev` | Internal: executive and employees, every channel | `sm-portal-install-int` | `gray-island-0ee6aea00.5.azurestaticapps.net` |
+| `install.simplemotion.com` | External: freelance and customers, `release` and `preview` only | `sm-portal-install-ext` | `lively-water-02e6ddc00.5.azurestaticapps.net` |
 
-- The `sm-pages.yml` workflow builds both copies from `main` and deploys both. The `deploy-ext` job pushes with a `sm-binary-bridge` token, so this repo needs access to the org secret `BRIDGE_APP_PRIVATE_KEY` and the org variable `BRIDGE_APP_CLIENT_ID`.
-- For the internal site, the custom domain is in the repo Pages settings, and the root `CNAME` is a record only. For the external site, the build writes `CNAME` and `.nojekyll` into `_site/ext`, because a branch build reads its domain from the branch.
-- DNS: each domain is a CNAME to `simplemotion.github.io` in its Azure DNS zone (`simplemotion.dev`, `simplemotion.com`; resource group `sm-dns`). If a zone has a CAA record, it must permit `letsencrypt.org`, or Pages cannot issue the certificate.
+- One SWA cannot serve different content for each host name, so each copy needs its own SWA.
+- `sm-pages.yml` builds both copies from `main`. Its `deploy-swa` job logs in with OIDC as the `sm-deploy-portal` app, fetches each SWA's deploy token, and deploys. It then fails if the SWA does not serve this build's `sm-install.sh`.
+- **The OIDC subject uses immutable IDs.** This repo sends `repo:simplemotion@278089773/sm-install-int@1240545778:ref:refs/heads/main`, not the name form that sm-website sends. The federated credential `sm-install-int-main-immutable` matches it, and it still matches after a rename.
+- `sm-build.ts` writes `staticwebapp.config.json` and a root `index.html` into each copy. The config sets the MIME types (`.ps1` and `.html` with a charset) and redirects `/` to `/release/`. The SWA deploy refuses a site with no root `index.html`.
+- DNS: each domain is a CNAME to its SWA's default host in its Azure DNS zone (`simplemotion.dev`, `simplemotion.com`; resource group `sm-dns`). Each SWA validated its domain with a `_dnsauth.install` TXT record. The certificates come from DigiCert (GeoTrust), so a CAA record on either zone must permit `digicert.com`.
+- History: GitHub Pages served both domains until 2026-10-12. The external copy was the `gh-pages` branch of `simplemotion/sm-install-ext`, because Pages gives each repo one custom domain.
 - The source is the internal copy. `sm-build.ts` writes the external copy: it changes each `install.simplemotion.dev` URL to `install.simplemotion.com`, and each audience marker (`SM_INSTALL_AUDIENCE='internal'`, `$SmInstallAudience = 'internal'`) to external. The build fails if a marker or an internal URL stays, or if the internal copy has an external URL.
 - To show a staff URL in a script, split the string (for example `"%s.dev"` with `https://install.simplemotion` as the argument). If you do not, the build changes it to `.com`.
 - **Both copies always have a page for every channel, and for every product on every channel**: `<domain>/<channel>/` and `<domain>/<channel>/<product>/` on both domains, for `release`, `preview`, `testing` and `develop`. These URLs are permanent. To add a product, add it to `PRODUCTS` in `sm-build.ts`; list only products that the public can know about, because `install.simplemotion.dev` is a public URL. `sm-build.ts` makes them from `sm-channel/index.html` and fails if one is missing. On the external copy, the testing and develop pages give the commands of the internal copy, because the external installer refuses those channels. The build fails if any page has no commands, or if a page mixes the two copies. Do not remove a page to restrict a channel: change what it shows. The template is not served.

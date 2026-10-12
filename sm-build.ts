@@ -1,4 +1,4 @@
-// Build step for the two installer sites (Pages):
+// Build step for the two installer sites (Azure Static Web Apps):
 // install.simplemotion.dev (internal) and install.simplemotion.com (external).
 //
 // 1. esbuild bundles + minifies each page's .ts entry into an IIFE.
@@ -20,11 +20,11 @@ import { join } from 'node:path';
 const SITE = '_site';
 // The assembled tree, before it is written out per audience.
 const TREE = `${SITE}/.tree`;
-// The internal copy: executive and employees, every channel. Served by
-// this repo's Pages site.
+// The internal copy: executive and employees, every channel. Served by the
+// SWA sm-portal-install-int.
 const INT_DOMAIN = 'install.simplemotion.dev';
 // The external copy: freelance and customers, release and preview only.
-// Served by the Pages site of simplemotion/sm-install-ext.
+// Served by the SWA sm-portal-install-ext.
 const EXT_DOMAIN = 'install.simplemotion.com';
 // The checks below match the whole origin, not the bare host.
 const INT_ORIGIN = `https://${INT_DOMAIN}`;
@@ -47,8 +47,6 @@ const SKIP = new Set([
   'package-lock.json',
   'tsconfig.json',
   'sm-build.ts',
-  // Pages takes the custom domain from the repo settings, not this file.
-  'CNAME',
   // Renderer tests and the transcript preview. Dev sources — they exercise
   // sm-install-lib.sh, they are not served from it.
   'tests',
@@ -210,11 +208,6 @@ for (const file of walk(EXT)) {
   for (const [re, to] of MARKERS) text = text.replace(re, to);
   writeFileSync(file, text);
 }
-// The external site is a branch build in sm-install-ext, so it carries its
-// own CNAME and turns Jekyll off. The internal site is an Actions deploy, and
-// Pages takes its domain from the repo settings.
-writeFileSync(`${EXT}/CNAME`, `${EXT_DOMAIN}\n`);
-writeFileSync(`${EXT}/.nojekyll`, '');
 
 // The external installer refuses the staff channels, so the external pages
 // for them give the commands of the INTERNAL copy (Greg, 2026-10-11): staff
@@ -292,7 +285,7 @@ const SWA_CONFIG = {
   routes: [{ route: '/', redirect: '/release/', statusCode: 302 }],
 };
 // The SWA deploy refuses a site with no root index.html. This page is the
-// fallback for a host that does not read the route above, such as Pages.
+// fallback for a client that does not follow the route's redirect.
 const ROOT_INDEX = `<!doctype html>
 <html lang="en">
 <head>

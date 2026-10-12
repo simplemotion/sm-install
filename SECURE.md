@@ -12,11 +12,11 @@
 
 # SECURE — simplemotion/sm-install-int
 
-> Security posture, threat model, and consumer verification recipe for `simplemotion/sm-install-int` and the site it deploys to `simplemotion/sm-install-ext`.
+> Security posture, threat model, and consumer verification recipe for `simplemotion/sm-install-int` and the two sites it deploys.
 
 ## What this repo serves
 
-This is the **public** installer-script home for SimpleMotion binary distribution, served at `install.simplemotion.dev` (GitHub Pages on `main`). The same build deploys the external copy to `install.simplemotion.com`, the `gh-pages` branch of `simplemotion/sm-install-ext`. It hosts:
+This is the **public** installer-script home for SimpleMotion binary distribution, served at `install.simplemotion.dev`. The same build deploys the external copy to `install.simplemotion.com`. Each copy is an Azure Static Web App in `rg-sm-portal-se`, deployed from `main`. It hosts:
 
 - `sm-install.sh` / `sm-install.ps1` — generic installer base (resolves channel → repo, downloads, verifies, installs).
 - `sm-welcome.sh` / `sm-welcome.ps1` — onboarding-CLI wrapper.
@@ -27,7 +27,7 @@ Binaries themselves are **not** stored here. They live in `simplemotion/{release
 
 ## Threat model
 
-- **Adversary substitutes the installer.** GitHub serves `*.sh` / `*.ps1` over TLS; consumers pinned to `install.simplemotion.dev` or `install.simplemotion.com` get the CNAME-anchored repo. Only the `deploy-ext` job of this repo writes the external site, with a `sm-binary-bridge` App token scoped to `sm-install-ext`.
+- **Adversary substitutes the installer.** Azure Static Web Apps serve `*.sh` / `*.ps1` over TLS. Each domain is a CNAME to its own SWA. Only the `deploy-swa` job of this repo writes either SWA. It logs in with OIDC as the `sm-deploy-portal` app, which trusts this repo's `main` branch by its immutable owner and repo IDs. After each deploy, it checks that the SWA serves this build's `sm-install.sh`.
 - **Adversary substitutes the binary.** Mitigated by SHA verification of the published `.sha256` sidecar and by sigstore build-provenance verification against the per-product source repo (e.g., `3400-0000-SM-Software/3400-0009-SM-Welcome` for `sm-welcome`).
 - **Adversary publishes a malicious preview release.** Preview channel is documented as early-access and may regress. `release` channel consumers are unaffected because they pull from a different repo entirely (`simplemotion/sm-release-external` vs `simplemotion/sm-preview-external`).
 - **Adversary smuggles a binary into a staff channel.** Internal channels (`develop`, `testing`) require authed `gh` with read access to the relevant private repo; external attackers without SimpleMotion credentials cannot reach those release assets.
