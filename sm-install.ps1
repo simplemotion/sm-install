@@ -7,7 +7,7 @@
 # PATH or execs from a temp file.
 #
 # Usage (typically called by a thin per-product wrapper):
-#   irm "https://install.simplemotion.dev/internal/sm-install.ps1" |
+#   irm "https://install.simplemotion.dev/sm-install.ps1" |
 #     iex "& { $input | Out-Null }; sm-install.ps1 -Repo ... -Package ..."
 #
 # More commonly invoked indirectly via a per-product wrapper that pipes
@@ -86,9 +86,10 @@ $ErrorActionPreference = 'Stop'
 # tested a new script against the previously-deployed library. Defaults to
 # production, so every documented one-liner is unaffected.
 # The audience of this copy. sm-build.ts writes 'external' here in the copy
-# that it serves from /external. The served path sets it, not the environment.
+# that it serves from the external domain. The domain sets it, not the
+# environment.
 $SmInstallAudience = 'internal'
-$SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { "https://install.simplemotion.dev/$SmInstallAudience" }
+$SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { "https://install.simplemotion.dev" }
 
 # Read a sibling script from the base. A base that does not look like a URL is
 # treated as a directory, which is what CI uses so the checked-out script and
@@ -119,10 +120,10 @@ if (-not $Channel) { $Channel = if ($env:SM_CHANNEL) { $env:SM_CHANNEL } else { 
 # the release and preview channels only. Stop here with a clear message, not
 # a 404 later.
 # This is guidance only: the channel repos control access. The staff URL is
-# split so that the build rewrite of /internal to /external does not change it.
+# split so that the build rewrite of .dev to .com does not change it.
 if ($SmInstallAudience -eq 'external' -and $Channel -notin @('release', 'preview')) {
     Write-Host ("  [x] The {0} channel is for SimpleMotion staff only." -f $Channel) -ForegroundColor Red
-    Write-Host ("      Staff: use the installers at {0}/internal instead." -f 'https://install.simplemotion.dev')
+    Write-Host ("      Staff: use the installers at {0}.dev instead." -f 'https://install.simplemotion')
     exit 1
 }
 # The 'private' channel was removed on 2026-10-11; staff-only packages stop at
@@ -174,7 +175,7 @@ if (-not $Version) {
             Write-Host ("      (https://github.com/{0} has no release to install.)" -f $Repo)
             Write-Host ""
             Write-Host "      Try another channel, e.g.:"
-            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex"
+            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/sm-welcome.ps1 | iex"
             Write-Host ""
             Write-Host "      Or contact executive@simplemotion.com if you expected a $Channel build."
             Write-Host ""
@@ -191,7 +192,7 @@ if (-not $Version) {
             Write-Host ("      (https://github.com/{0} has no release to install.)" -f $Repo)
             Write-Host ""
             Write-Host "      Try another channel, e.g.:"
-            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex"
+            Write-Host "        `$env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/sm-welcome.ps1 | iex"
             Write-Host ""
             Write-Host "      Or contact executive@simplemotion.com if you expected a $Channel build."
             Write-Host ""

@@ -112,9 +112,10 @@ gh_api() {
 # runs the working tree, which is what tests/render-test.sh does. Defaults to
 # production, so every documented one-liner is unaffected.
 # The audience of this copy. sm-build.ts writes 'external' here in the copy
-# that it serves from /external. The served path sets it, not the environment.
+# that it serves from the external domain. The domain sets it, not the
+# environment.
 SM_INSTALL_AUDIENCE='internal'
-SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.dev/${SM_INSTALL_AUDIENCE}}"
+SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.dev}"
 
 # Source the shared install-toolchain library (confirm_section,
 # find_cosign, ensure_cosign, initialize_cosign_tuf). sm-welcome.sh
@@ -194,7 +195,7 @@ esac
 # This is guidance only: the channel repos control access.
 if [[ "$SM_INSTALL_AUDIENCE" == external && "$CHANNEL" != release && "$CHANNEL" != preview ]]; then
     printf 'sm-install.sh: the %s channel is for SimpleMotion staff only.\n' "$CHANNEL" >&2
-    printf '  Staff: use the installers at %s/internal instead.\n' "https://install.simplemotion.dev" >&2
+    printf '  Staff: use the installers at %s.dev instead.\n' "https://install.simplemotion" >&2
     exit 1
 fi
 # Every channel has an -external repo and a private -internal repo: two
@@ -351,7 +352,7 @@ if [[ -z "$VERSION" ]]; then
                 printf '      (https://github.com/%s has no release to install.)\n\n' "$REPO"
             fi
             printf '      Try another channel, e.g.:\n'
-            printf '        curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh | bash -s -- --channel release\n\n'
+            printf '        curl -fsSL https://install.simplemotion.dev/sm-welcome.sh | bash -s -- --channel release\n\n'
             printf '      Or contact executive@simplemotion.com if you expected a %s build.\n\n' "$CHANNEL"
         } >&2
         exit 1

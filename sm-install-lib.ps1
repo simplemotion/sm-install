@@ -6,7 +6,7 @@
 #   - sm-simplicity.ps1  (thin sm-install.ps1 wrapper)
 #
 # Usage:
-#   $lib = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.dev/internal/sm-install-lib.ps1')
+#   $lib = (New-Object Net.WebClient).DownloadString('https://install.simplemotion.dev/sm-install-lib.ps1')
 #   Invoke-Expression $lib
 #
 # Callers must load this lib BEFORE checking $PSVersionTable (see

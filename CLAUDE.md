@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## What this repo is
 
-`simplemotion/sm-install` is the **public** installer-script home for SimpleMotion binary distribution. It hosts the shell installers consumers fetch via `curl | bash` or `irm | iex`, plus the landing page served at `install.simplemotion.dev`.
+`simplemotion/sm-install-int` is the **public** installer-script home for SimpleMotion binary distribution. It hosts the shell installers that consumers fetch with `curl | bash` or `irm | iex`, and the landing pages on `install.simplemotion.dev` (internal) and `install.simplemotion.com` (external).
 
 This repo contains **no binaries**. It is the routing layer between consumers and the four channel repos that host actual release assets.
 
@@ -12,7 +12,8 @@ This repo contains **no binaries**. It is the routing layer between consumers an
 
 | Repo | Visibility | Role |
 |---|---|---|
-| `simplemotion/sm-install` (this) | public | Installer scripts + Pages |
+| `simplemotion/sm-install-int` (this) | public | Installer source + Pages for `install.simplemotion.dev` |
+| `simplemotion/sm-install-ext` | public | Pages for `install.simplemotion.com`, deployed from this repo |
 | `simplemotion/sm-release-external` | public | Production binaries |
 | `simplemotion/sm-preview-external` | public | Preview / beta binaries |
 | `simplemotion/sm-develop-external` | private | Development — earliest builds |
@@ -45,14 +46,21 @@ All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enter
 
 ## DNS / Pages
 
-`install.simplemotion.dev` is a GitHub Pages site. The `sm-pages.yml` workflow builds it from `main` and deploys it. The custom domain is set in the repo Pages settings; `CNAME` is a record only. DNS is a CNAME to `simplemotion.github.io` in the Azure DNS zone `simplemotion.dev` (resource group `sm-dns`). The zone CAA must allow `letsencrypt.org`, or Pages cannot issue the certificate.
+There are two GitHub Pages sites, one for each domain, because Pages gives each repo one custom domain (Greg, 2026-10-12):
 
-- The site has two copies: `/internal` (executive and employees) and `/external` (freelance and customers, `release` and `preview` channels only).
-- The source is the internal copy. `sm-build.ts` writes the external copy: it changes each `install.simplemotion.dev/internal` URL and each audience marker (`SM_INSTALL_AUDIENCE='internal'`, `$SmInstallAudience = 'internal'`) to external. The build fails if a marker or an internal URL stays.
-- To show a staff URL in a script, split the string (for example `"%s/internal"` with the domain as the argument). If you do not, the build changes it to `/external`.
-- **Both copies always have a page for every channel, and for every product on every channel**: `/internal/<channel>/`, `/internal/<channel>/<product>/` and the same under `/external`, for `release`, `preview`, `testing` and `develop`. These URLs are permanent. To add a product, add it to `PRODUCTS` in `sm-build.ts`; list only products that the public may know about, because `/internal` is a public URL. `sm-build.ts` makes them from `sm-channel/index.html` and fails if one is missing. On the external copy, the testing and develop pages give the commands of the internal copy, because the external installer refuses those channels. The build fails if any page has no commands, or if a page mixes the two copies. Do not remove a page to restrict a channel: change what it shows. The template is not served.
+| Domain | Copy | Repo | Deploy |
+|---|---|---|---|
+| `install.simplemotion.dev` | Internal: executive and employees, every channel | this repo | Actions deploy of `_site/int` |
+| `install.simplemotion.com` | External: freelance and customers, `release` and `preview` only | `simplemotion/sm-install-ext` | Branch build of `gh-pages`, which `sm-pages.yml` replaces with `_site/ext` |
+
+- The `sm-pages.yml` workflow builds both copies from `main` and deploys both. The `deploy-ext` job pushes with a `sm-binary-bridge` token, so this repo needs access to the org secret `BRIDGE_APP_PRIVATE_KEY` and the org variable `BRIDGE_APP_CLIENT_ID`.
+- For the internal site, the custom domain is in the repo Pages settings, and the root `CNAME` is a record only. For the external site, the build writes `CNAME` and `.nojekyll` into `_site/ext`, because a branch build reads its domain from the branch.
+- DNS: each domain is a CNAME to `simplemotion.github.io` in its Azure DNS zone (`simplemotion.dev`, `simplemotion.com`; resource group `sm-dns`). If a zone has a CAA record, it must permit `letsencrypt.org`, or Pages cannot issue the certificate.
+- The source is the internal copy. `sm-build.ts` writes the external copy: it changes each `install.simplemotion.dev` URL to `install.simplemotion.com`, and each audience marker (`SM_INSTALL_AUDIENCE='internal'`, `$SmInstallAudience = 'internal'`) to external. The build fails if a marker or an internal URL stays, or if the internal copy has an external URL.
+- To show a staff URL in a script, split the string (for example `"%s.dev"` with `https://install.simplemotion` as the argument). If you do not, the build changes it to `.com`.
+- **Both copies always have a page for every channel, and for every product on every channel**: `<domain>/<channel>/` and `<domain>/<channel>/<product>/` on both domains, for `release`, `preview`, `testing` and `develop`. These URLs are permanent. To add a product, add it to `PRODUCTS` in `sm-build.ts`; list only products that the public can know about, because `install.simplemotion.dev` is a public URL. `sm-build.ts` makes them from `sm-channel/index.html` and fails if one is missing. On the external copy, the testing and develop pages give the commands of the internal copy, because the external installer refuses those channels. The build fails if any page has no commands, or if a page mixes the two copies. Do not remove a page to restrict a channel: change what it shows. The template is not served.
 - These URLs are permanent. Do not move them again. If the host changes, change DNS only.
-- `install.simplemotion.com` was retired on 2026-10-11, with no redirect.
+- History: `install.simplemotion.com` served one copy until 2026-10-11. From 2026-10-11 to 2026-10-12, both copies were on `install.simplemotion.dev/internal` and `/external`. Greg removed those two paths on 2026-10-12, with no redirect.
 
 ## When in doubt, ask
 

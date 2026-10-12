@@ -14,7 +14,7 @@
 # Outputs are NOT redirected so we see gh's real error if any test fails.
 #
 # Usage:
-#   curl -fsSL https://install.simplemotion.dev/internal/diagnose-attestation.sh | bash
+#   curl -fsSL https://install.simplemotion.dev/diagnose-attestation.sh | bash
 # or
 #   bash /tmp/diagnose-attestation.sh [channel] [tag] [triple]
 #

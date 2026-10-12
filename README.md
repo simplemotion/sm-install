@@ -1,17 +1,19 @@
-# simplemotion/sm-install
+# simplemotion/sm-install-int
 
 Installer scripts for [SimpleMotion](https://simplemotion.com) binary products. One command installs the SimpleMotion CLIs.
 
-This is the public bootstrap entry point served at **`install.simplemotion.dev`**, in two copies:
+This repo is the public bootstrap entry point. It serves two copies of the installers, one on each domain:
 
-| URL | Audience | Channels |
-|---|---|---|
-| `https://install.simplemotion.dev/internal` | Executive and employees cohorts | All |
-| `https://install.simplemotion.dev/external` | Freelance and customers cohorts | `release` and `preview` |
+| URL | Audience | Channels | Served by |
+|---|---|---|---|
+| `https://install.simplemotion.dev` | Executive and employees cohorts | All | This repo |
+| `https://install.simplemotion.com` | Freelance and customers cohorts | `release` and `preview` | [simplemotion/sm-install-ext](https://github.com/simplemotion/sm-install-ext) |
 
-The two copies come from the same source. The build writes the external copy
-with `/external` URLs, and its installer stops when you ask for a channel other
-than `release` or `preview`. That stop is guidance only: the channel repos control access.
+The two copies come from the same source, in this repo. The build writes the
+external copy with `install.simplemotion.com` URLs, and its installer stops
+when you ask for a channel other than `release` or `preview`. That stop is
+guidance only: the channel repos control access. `sm-install-ext` holds no
+source. Each deploy replaces its `gh-pages` branch.
 
 **Do not copy these URLs into other repos.** Link to this README in docs. Rust
 code gets the URL from the `sm-install-url` crate in `3400-0001-SM-Core`.
@@ -77,7 +79,7 @@ external. The `private` channel was removed on 2026-10-11.
 ## Channel pages
 
 Each copy always has one page per channel, and one page per product on each
-channel, under `https://install.simplemotion.dev/internal` and `/external`:
+channel, on `https://install.simplemotion.dev` and `https://install.simplemotion.com`:
 
 - `/<channel>/` lists every product with its install commands.
 - `/<channel>/<product>/` gives the commands for one product, for example
@@ -96,13 +98,13 @@ the pages from `sm-channel/index.html` and the `PRODUCTS` list in
 
 ```bash
 # release channel (stable)
-bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome
+bash -c "$(curl -fsSL https://install.simplemotion.dev/sm-welcome.sh)" sm-welcome
 
 # preview channel (early access)
-bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome --channel preview
+bash -c "$(curl -fsSL https://install.simplemotion.dev/sm-welcome.sh)" sm-welcome --channel preview
 
 # develop channel (SimpleMotion internal)
-bash -c "$(curl -fsSL https://install.simplemotion.dev/internal/sm-welcome.sh)" sm-welcome --channel develop
+bash -c "$(curl -fsSL https://install.simplemotion.dev/sm-welcome.sh)" sm-welcome --channel develop
 ```
 
 The `bash -c "$(curl …)"` form (rather than `curl … | bash`) is required so the installer can read interactive prompts from your terminal.
@@ -111,20 +113,20 @@ The `bash -c "$(curl …)"` form (rather than `curl … | bash`) is required so 
 
 ```powershell
 # release channel (stable)
-irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex
+irm https://install.simplemotion.dev/sm-welcome.ps1 | iex
 
 # preview channel
-$env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/internal/sm-welcome.ps1 | iex
+$env:SM_CHANNEL='preview'; irm https://install.simplemotion.dev/sm-welcome.ps1 | iex
 ```
 
 Freelance and customers cohorts use the external copy:
 
 ```bash
-bash -c "$(curl -fsSL https://install.simplemotion.dev/external/sm-welcome.sh)" sm-welcome
+bash -c "$(curl -fsSL https://install.simplemotion.com/sm-welcome.sh)" sm-welcome
 ```
 
 ```powershell
-irm https://install.simplemotion.dev/external/sm-welcome.ps1 | iex
+irm https://install.simplemotion.com/sm-welcome.ps1 | iex
 ```
 
 ## Install — sm-simplicity (Simplicity product)
@@ -132,10 +134,10 @@ irm https://install.simplemotion.dev/external/sm-welcome.ps1 | iex
 ### macOS / Linux
 
 ```bash
-curl -fsSL https://install.simplemotion.dev/internal/sm-simplicity.sh | bash
+curl -fsSL https://install.simplemotion.dev/sm-simplicity.sh | bash
 ```
 
-Customers use `https://install.simplemotion.dev/external/sm-simplicity.sh`.
+Customers use `https://install.simplemotion.com/sm-simplicity.sh`.
 
 Installs to `~/.local/bin/sm-simplicity`. Override with `SM_SIMPLICITY_INSTALL_DIR=/some/path`.
 
