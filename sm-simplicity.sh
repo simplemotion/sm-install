@@ -21,10 +21,8 @@ curl() { command curl --tlsv1.2 "$@"; }
 
 printf '\n  SimpleMotion — Simplicity Installer\n  ═══════════════════════════════════\n\n'
 
-# The audience of this copy. sm-build.ts writes 'external' here in the copy
-# that it serves from the external domain. The domain sets it, not the
-# environment.
-SM_INSTALL_AUDIENCE='internal'
+# sm-build.ts writes the external domain here in the external copy. The
+# fetched sm-install script carries the audience marker.
 SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.dev}"
 INSTALL_SH=$(curl -fsSL "${SM_INSTALL_BASE}/sm-install.sh")
 exec bash -c "$INSTALL_SH" install \

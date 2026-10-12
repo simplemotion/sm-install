@@ -16,10 +16,8 @@ $ErrorActionPreference = 'Stop'
 # Source the shared install-toolchain library. Brings in Invoke-Pwsh7Guard
 # (used immediately below) plus the helpers sm-install.ps1 needs once
 # relaunched under pwsh 7 (Confirm-AssetDigest, Find-Cosign, etc.).
-# The audience of this copy. sm-build.ts writes 'external' here in the copy
-# that it serves from the external domain. The domain sets it, not the
-# environment.
-$SmInstallAudience = 'internal'
+# sm-build.ts writes the external domain here in the external copy. The
+# fetched sm-install script carries the audience marker.
 $SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { "https://install.simplemotion.dev" }
 $smInstallLib = (New-Object Net.WebClient).DownloadString("$SmInstallBase/sm-install-lib.ps1")
 Invoke-Expression $smInstallLib

@@ -57,10 +57,8 @@ $ErrorActionPreference = 'Stop'
 # Bash side, added in sm-install#86 after a merge raced its own Pages deploy and
 # tested a new script against the previously-deployed library. Defaults to
 # production, so every documented one-liner is unaffected.
-# The audience of this copy. sm-build.ts writes 'external' here in the copy
-# that it serves from the external domain. The domain sets it, not the
-# environment.
-$SmInstallAudience = 'internal'
+# sm-build.ts writes the external domain here in the external copy. The
+# fetched sm-install script carries the audience marker.
 $SmInstallBase = if ($env:SM_INSTALL_BASE) { $env:SM_INSTALL_BASE } else { "https://install.simplemotion.dev" }
 
 # Read a sibling script from the base. A base that does not look like a URL is

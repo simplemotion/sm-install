@@ -26,6 +26,9 @@ const INT_DOMAIN = 'install.simplemotion.dev';
 // The external copy: freelance and customers, release and preview only.
 // Served by the Pages site of simplemotion/sm-install-ext.
 const EXT_DOMAIN = 'install.simplemotion.com';
+// The checks below match the whole origin, not the bare host.
+const INT_ORIGIN = `https://${INT_DOMAIN}`;
+const EXT_ORIGIN = `https://${EXT_DOMAIN}`;
 
 // The interactive pages: each has a dir with index.html (carrying the
 // placeholder) and a same-named .ts entry that gets bundled + inlined.
@@ -97,7 +100,7 @@ const CHANNELS = [
 const STAFF_CHANNELS = new Set(['testing', 'develop']);
 // The products that the installer site installs. The base is the internal
 // copy; step 3 changes it to the external domain in the external copy.
-const BASE = `https://${INT_DOMAIN}`;
+const BASE = INT_ORIGIN;
 const PRODUCTS = [
   {
     id: 'sm-welcome',
@@ -180,15 +183,14 @@ const walk = (dir: string): string[] =>
     return statSync(p).isDirectory() ? walk(p) : [p];
   });
 
-// The audience markers. Each script that fetches a sibling carries exactly one.
+// The audience markers. The installer base carries exactly one in each
+// language. The wrappers carry none: they run the sm-install script of their
+// own copy, so they get its audience.
 const MARKERS: [RegExp, string][] = [
   [/^SM_INSTALL_AUDIENCE='internal'$/m, "SM_INSTALL_AUDIENCE='external'"],
   [/^\$SmInstallAudience = 'internal'$/m, "$SmInstallAudience = 'external'"],
 ];
-const MARKED = [
-  'sm-install.sh', 'sm-welcome.sh', 'sm-simplicity.sh',
-  'sm-install.ps1', 'sm-welcome.ps1', 'sm-simplicity.ps1',
-];
+const MARKED = ['sm-install.sh', 'sm-install.ps1'];
 const PAGE_DIRS = PAGES.map((p) => p.dir);
 
 const INT = `${SITE}/int`;
@@ -239,17 +241,17 @@ for (const name of MARKED) {
 }
 for (const dir of PAGE_DIRS) {
   const html = readFileSync(`${EXT}/${dir}/index.html`, 'utf8');
-  if (!html.includes(EXT_DOMAIN)) fail(`${dir}/index.html has no external base`);
+  if (!html.includes(EXT_ORIGIN)) fail(`${dir}/index.html has no external base`);
 }
 // Every channel, and every product on every channel, has a page in BOTH
 // copies, always: <domain>/<channel>/[<product>/] are permanent URLs on
 // both domains. A missing page fails the build.
-const DOMAINS = { internal: INT_DOMAIN, external: EXT_DOMAIN };
+const ORIGINS = { internal: INT_ORIGIN, external: EXT_ORIGIN };
 for (const ch of CHANNELS) {
   for (const aud of ['internal', 'external'] as const) {
     for (const sub of ['', ...PRODUCTS.map((p) => `${p.id}/`)]) {
       const page = `${aud === 'internal' ? INT : EXT}/${ch.id}/${sub}index.html`;
-      const where = `${DOMAINS[aud]}/${ch.id}/${sub}`;
+      const where = `${ORIGINS[aud]}/${ch.id}/${sub}`;
       if (!existsSync(page)) throw new Error(`${where} is missing: every page must exist in both copies`);
       const html = readFileSync(page, 'utf8');
       if (!html.includes('<img class="banner"')) throw new Error(`${where} has no SimpleMotion banner`);
@@ -258,7 +260,7 @@ for (const ch of CHANNELS) {
       // the internal copy, and every other page uses its own copy.
       const want = aud === 'external' && !STAFF_CHANNELS.has(ch.id) ? 'external' : 'internal';
       const other = want === 'internal' ? 'external' : 'internal';
-      if (!html.includes(`${DOMAINS[want]}/`) || html.includes(`${DOMAINS[other]}/`)) {
+      if (!html.includes(`${ORIGINS[want]}/`) || html.includes(`${ORIGINS[other]}/`)) {
         throw new Error(`${where}: its commands must use the ${want} copy only`);
       }
     }
@@ -266,10 +268,10 @@ for (const ch of CHANNELS) {
 }
 const staffPageFiles = new Set(STAFF_PAGES.map((rel) => `${EXT}/${rel}`));
 for (const file of walk(EXT).filter((f) => REWRITTEN.test(f) && !staffPageFiles.has(f))) {
-  if (readFileSync(file, 'utf8').includes(INT_DOMAIN)) fail(`${file} still has an internal URL`);
+  if (readFileSync(file, 'utf8').includes(INT_ORIGIN)) fail(`${file} still has an internal URL`);
 }
 // The internal copy names no external URL: the rewrite runs one way only.
 for (const file of walk(INT).filter((f) => REWRITTEN.test(f))) {
-  if (readFileSync(file, 'utf8').includes(EXT_DOMAIN)) throw new Error(`internal copy: ${file} has an external URL`);
+  if (readFileSync(file, 'utf8').includes(EXT_ORIGIN)) throw new Error(`internal copy: ${file} has an external URL`);
 }
 console.log(`built ${INT} (${INT_DOMAIN}) and ${EXT} (${EXT_DOMAIN}) — ${urls} URLs changed to the external domain`);

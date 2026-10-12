@@ -71,10 +71,8 @@ export TUF_ROOT="${TUF_ROOT:-$HOME/.simplemotion/sigstore}"
 # be exercised end-to-end before it is deployed — `SM_INSTALL_BASE=file://$PWD`
 # runs the working tree, which is what tests/render-test.sh does. Defaults to
 # production, so every documented one-liner is unaffected.
-# The audience of this copy. sm-build.ts writes 'external' here in the copy
-# that it serves from the external domain. The domain sets it, not the
-# environment.
-SM_INSTALL_AUDIENCE='internal'
+# sm-build.ts writes the external domain here in the external copy. The
+# fetched sm-install script carries the audience marker.
 SM_INSTALL_BASE="${SM_INSTALL_BASE:-https://install.simplemotion.dev}"
 
 # Source the shared install-toolchain library. Brings in confirm_section,
