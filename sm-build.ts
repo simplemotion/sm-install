@@ -5,7 +5,7 @@
 // 2. The served tree is assembled once, with each page's
 //    <!--SM_*_SCRIPT--> placeholder replaced by its inlined bundle.
 //    No .js is committed; the browser-served script is build output.
-// 3. The tree is written twice, as _site/int/ and _site/ext/. Each one is
+// 3. The build writes the tree twice, as _site/int/ and _site/ext/. Each is
 //    the root of its own domain. The source is the internal copy. In the
 //    external copy the build changes each internal domain to the external
 //    domain and each audience marker to 'external'. The build fails if a
