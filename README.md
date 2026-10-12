@@ -83,10 +83,12 @@ channel, on `https://install.simplemotion.dev` and `https://install.simplemotion
 
 - `/<channel>/` lists every product with its install commands.
 - `/<channel>/<product>/` gives the commands for one product, for example
-  `/release/sm-welcome/` and `/develop/sm-simplicity/`.
+  `/release/sm-welcome/`.
 
-The channels are `release`, `preview`, `testing` and `develop`. The products
-are `sm-welcome` and `sm-simplicity`. On the external copy, the testing and
+The channels are `release`, `preview`, `testing` and `develop`. The only product
+on the channel pages is `sm-welcome`. Simplicity left them on 2026-10-12,
+because no channel holds a `sm-simplicity` build. Its old channel URLs redirect
+to the channel page. The `/sm-simplicity/` activation page stays. On the external copy, the testing and
 develop pages give the commands of the internal copy, because the external
 installer refuses those channels. Only staff can read those channels. The build makes
 the pages from `sm-channel/index.html` and the `PRODUCTS` list in

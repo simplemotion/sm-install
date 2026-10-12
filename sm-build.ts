@@ -106,13 +106,12 @@ const PRODUCTS = [
     unix: (ch: string) => `bash -c "$(curl -fsSL ${BASE}/sm-welcome.sh)" sm-welcome --channel ${ch}`,
     windows: (ch: string) => `$env:SM_CHANNEL='${ch}'; irm ${BASE}/sm-welcome.ps1 | iex`,
   },
-  {
-    id: 'sm-simplicity',
-    summary: 'Simplicity. Installs the sm-simplicity application.',
-    unix: (ch: string) => `SM_CHANNEL=${ch} bash -c "$(curl -fsSL ${BASE}/sm-simplicity.sh)" sm-simplicity`,
-    windows: (ch: string) => `$env:SM_CHANNEL='${ch}'; irm ${BASE}/sm-simplicity.ps1 | iex`,
-  },
 ];
+// Simplicity left the channel pages on 2026-10-12 (Greg): no channel holds a
+// sm-simplicity build, so its commands could only fail. The activation page
+// /sm-simplicity/ and sm-simplicity.{sh,ps1} stay, because the SM-Activate
+// email links to that page. Its old channel URLs redirect to the channel.
+const RETIRED_PRODUCT_PAGES = ['sm-simplicity'];
 const COMMANDS = /<!--SM_COMMANDS_BEGIN-->[\s\S]*<!--SM_COMMANDS_END-->/;
 const commandsHtml = (p: (typeof PRODUCTS)[number], ch: string): string =>
   `  <p class="os">macOS / Linux</p>\n  <pre><code>${p.unix(ch)}</code></pre>\n` +
@@ -282,7 +281,14 @@ const SWA_CONFIG = {
   },
   globalHeaders: { 'X-Content-Type-Options': 'nosniff' },
   // The domain root has no page of its own: send it to the release channel.
-  routes: [{ route: '/', redirect: '/release/', statusCode: 302 }],
+  routes: [
+    { route: '/', redirect: '/release/', statusCode: 302 },
+    ...RETIRED_PRODUCT_PAGES.flatMap((p) =>
+      CHANNELS.flatMap((c) =>
+        [`/${c.id}/${p}`, `/${c.id}/${p}/*`].map((route) => ({ route, redirect: `/${c.id}/`, statusCode: 301 })),
+      ),
+    ),
+  ],
 };
 // The SWA deploy refuses a site with no root index.html. This page is the
 // fallback for a client that does not follow the route's redirect.
