@@ -274,4 +274,21 @@ for (const file of walk(EXT).filter((f) => REWRITTEN.test(f) && !staffPageFiles.
 for (const file of walk(INT).filter((f) => REWRITTEN.test(f))) {
   if (readFileSync(file, 'utf8').includes(EXT_ORIGIN)) throw new Error(`internal copy: ${file} has an external URL`);
 }
+// Azure Static Web Apps config, one per copy (Greg, 2026-10-12): each copy is
+// its own SWA in rg-sm-portal-se, beside the sm-website SWAs. SWA does not
+// serve this file. The MIME types keep what Pages served, except that .ps1 is
+// text, so that `irm | iex` gets a string. /release redirects to /release/.
+const SWA_CONFIG = {
+  trailingSlash: 'auto',
+  mimeTypes: {
+    '.sh': 'application/x-sh',
+    '.ps1': 'text/plain; charset=utf-8',
+    '.md': 'text/markdown; charset=utf-8',
+  },
+  globalHeaders: { 'X-Content-Type-Options': 'nosniff' },
+};
+for (const dir of [INT, EXT]) {
+  writeFileSync(`${dir}/staticwebapp.config.json`, `${JSON.stringify(SWA_CONFIG, null, 2)}\n`);
+}
+
 console.log(`built ${INT} (${INT_DOMAIN}) and ${EXT} (${EXT_DOMAIN}) — ${urls} URLs changed to the external domain`);
