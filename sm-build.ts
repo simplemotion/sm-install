@@ -286,9 +286,26 @@ const SWA_CONFIG = {
     '.md': 'text/markdown; charset=utf-8',
   },
   globalHeaders: { 'X-Content-Type-Options': 'nosniff' },
+  // The domain root has no page of its own: send it to the release channel.
+  routes: [{ route: '/', redirect: '/release/', statusCode: 302 }],
 };
+// The SWA deploy refuses a site with no root index.html. This page is the
+// fallback for a host that does not read the route above, such as Pages.
+const ROOT_INDEX = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="0; url=release/">
+<link rel="canonical" href="release/">
+<title>SimpleMotion installers</title>
+</head>
+<body><p><a href="release/">SimpleMotion installers: release channel</a></p></body>
+</html>
+`;
 for (const dir of [INT, EXT]) {
   writeFileSync(`${dir}/staticwebapp.config.json`, `${JSON.stringify(SWA_CONFIG, null, 2)}\n`);
+  if (existsSync(`${dir}/index.html`)) throw new Error(`${dir}/index.html exists: the root redirect would replace it`);
+  writeFileSync(`${dir}/index.html`, ROOT_INDEX);
 }
 
 console.log(`built ${INT} (${INT_DOMAIN}) and ${EXT} (${EXT_DOMAIN}) — ${urls} URLs changed to the external domain`);
