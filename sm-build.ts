@@ -284,6 +284,8 @@ const SWA_CONFIG = {
     '.sh': 'application/x-sh',
     '.ps1': 'text/plain; charset=utf-8',
     '.md': 'text/markdown; charset=utf-8',
+    // SWA sends text/html with no charset; Pages sent utf-8 (Greg, 2026-10-12).
+    '.html': 'text/html; charset=utf-8',
   },
   globalHeaders: { 'X-Content-Type-Options': 'nosniff' },
   // The domain root has no page of its own: send it to the release channel.
