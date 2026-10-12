@@ -4,6 +4,9 @@ name: sm-pages
 #   install.simplemotion.dev  internal copy, this repo's Pages (Actions deploy)
 #   install.simplemotion.com  external copy, the gh-pages branch of
 #                             simplemotion/sm-install-ext (branch build)
+# The deploy-swa job also deploys each copy to its own Azure Static Web App,
+# sm-portal-install-int and sm-portal-install-ext (Greg, 2026-10-12). The
+# domains move to SWA in DNS; the Pages jobs are removed after that.
 # GitHub Pages gives each repo one custom domain, so the external copy needs
 # its own repo. sm-install-ext holds no source: each deploy replaces its
 # gh-pages branch with one commit.
@@ -42,6 +45,12 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site/int
+      - uses: actions/upload-artifact@v7
+        with:
+          name: site-int
+          path: _site/int
+          include-hidden-files: true
+          if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
           name: site-ext
@@ -117,3 +126,66 @@ jobs:
           got=$(git ls-remote "https://x-access-token:${TOKEN}@github.com/simplemotion/sm-install-ext.git" refs/heads/gh-pages | cut -f1)
           test "$want" = "$got"
           echo "::notice::sm-install-ext gh-pages is ${got}"
+
+  deploy-swa:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - copy: int
+            swa: sm-portal-install-int
+          - copy: ext
+            swa: sm-portal-install-ext
+    name: deploy-swa (${{ matrix.copy }})
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: site-${{ matrix.copy }}
+          path: site
+
+      # OIDC, as in sm-website: the sm-deploy-portal app trusts this repo's
+      # main branch, and has Contributor on rg-sm-portal-se.
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Fetch SWA deployment token
+        id: token
+        run: |
+          set -euo pipefail
+          TOKEN="$(az staticwebapp secrets list --name '${{ matrix.swa }}' --resource-group rg-sm-portal-se --query properties.apiKey -o tsv)"
+          test -n "$TOKEN"
+          echo "::add-mask::$TOKEN"
+          {
+            echo "value<<EOF"
+            echo "$TOKEN"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.token.outputs.value }}
+          action: upload
+          app_location: site
+          api_location: ""
+          skip_app_build: true
+          output_location: ""
+
+      # Verify the effect: the SWA serves this build's installer.
+      - name: Check the deployed installer
+        run: |
+          set -euo pipefail
+          host="$(az staticwebapp show --name '${{ matrix.swa }}' --resource-group rg-sm-portal-se --query defaultHostname -o tsv)"
+          want="$(sha256sum site/sm-install.sh | cut -d' ' -f1)"
+          for _ in $(seq 1 20); do
+            got="$(curl -fsS "https://${host}/sm-install.sh" | sha256sum | cut -d' ' -f1 || true)"
+            [ "$got" = "$want" ] && { echo "::notice::${host}/sm-install.sh matches this build"; exit 0; }
+            sleep 15
+          done
+          echo "::error::${host}/sm-install.sh does not match this build" >&2
+          exit 1

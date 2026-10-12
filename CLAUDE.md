@@ -46,6 +46,18 @@ All SimpleMotion-authored scripts in this repo are `sm-*`-prefixed per the enter
 
 ## DNS / Pages
 
+**Move to Azure Static Web Apps (Greg, 2026-10-12).** Each copy now also deploys to its own SWA in `rg-sm-portal-se` (subscription SimpleMotion.Entertainment), beside the sm-website SWAs:
+
+| Copy | SWA | Default host |
+|---|---|---|
+| Internal | `sm-portal-install-int` | `gray-island-0ee6aea00.5.azurestaticapps.net` |
+| External | `sm-portal-install-ext` | `lively-water-02e6ddc00.5.azurestaticapps.net` |
+
+- The `deploy-swa` job logs in with OIDC as the `sm-deploy-portal` app, which trusts this repo's `main` branch. It fetches each SWA's deploy token, deploys, and then fails if the SWA does not serve this build's `sm-install.sh`.
+- One SWA cannot serve different content for each host name, so each copy needs its own SWA.
+- `sm-build.ts` writes `staticwebapp.config.json` into each copy. It keeps the MIME types that Pages served, but serves `.ps1` as text.
+- The two domains move to the SWAs in DNS. A TXT record validates each domain first, and then the CNAME changes. After that, a second change removes the Pages jobs and archives `sm-install-ext`. Until then, the Pages notes below stay correct.
+
 There are two GitHub Pages sites, one for each domain, because Pages gives each repo one custom domain (Greg, 2026-10-12):
 
 | Domain | Copy | Repo | Deploy |
