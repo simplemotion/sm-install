@@ -62,16 +62,17 @@ for (const entry of readdirSync('.')) {
 }
 
 // 2. Bundle each page's script and inline it; the .ts source is not served.
-for (const { dir, entry, placeholder } of PAGES) {
-  const result = buildSync({
-    entryPoints: [`${dir}/${entry}`],
+const bundle = (entry: string): string =>
+  buildSync({
+    entryPoints: [entry],
     bundle: true,
     minify: true,
     format: 'iife',
     target: 'es2020',
     write: false,
-  });
-  const js = result.outputFiles[0].text.trimEnd();
+  }).outputFiles[0].text.trimEnd();
+for (const { dir, entry, placeholder } of PAGES) {
+  const js = bundle(`${dir}/${entry}`);
 
   rmSync(`${TREE}/${dir}/${entry}`, { force: true });
 
@@ -112,14 +113,24 @@ const PRODUCTS = [
 // /sm-simplicity/ and sm-simplicity.{sh,ps1} stay, because the SM-Activate
 // email links to that page. Its old channel URLs redirect to the channel.
 const RETIRED_PRODUCT_PAGES = ['sm-simplicity'];
+const CHANNEL_SCRIPT = '<!--SM_CHANNEL_SCRIPT-->';
 const COMMANDS = /<!--SM_COMMANDS_BEGIN-->[\s\S]*<!--SM_COMMANDS_END-->/;
+// Each command has a copy button on its right. sm-channel.ts makes it work.
+const COPY_BUTTON = '<button class="copy" type="button" aria-label="Copy command">Copy</button>';
+const commandHtml = (cmd: string): string => `  <div class="cmd"><pre><code>${cmd}</code></pre>${COPY_BUTTON}</div>\n`;
 const commandsHtml = (p: (typeof PRODUCTS)[number], ch: string): string =>
-  `  <p class="os">macOS / Linux</p>\n  <pre><code>${p.unix(ch)}</code></pre>\n` +
-  `  <p class="os">Windows (PowerShell)</p>\n  <pre><code>${p.windows(ch)}</code></pre>\n`;
+  `  <p class="os">macOS / Linux</p>\n${commandHtml(p.unix(ch))}` +
+  `  <p class="os">Windows (PowerShell)</p>\n${commandHtml(p.windows(ch))}`;
+// The build grays out the staff channels. sm-channel.ts makes them available
+// when a staff member has signed in (Greg, 2026-10-14). Release and Preview are open to everyone.
+// The current channel stays highlighted, not grayed out.
+const LOCKED = ' class="locked" aria-disabled="true" tabindex="-1" title="SimpleMotion staff only: sign in to open"';
 const navHtml = (current: string, href: (c: string) => string): string =>
-  CHANNELS.map(
-    (c) => `<a href="${href(c.id)}"${c.id === current ? ' class="active" aria-current="page"' : ''}>${c.title}</a>`,
-  ).join('');
+  CHANNELS.map((c) => {
+    const attrs =
+      c.id === current ? ' class="active" aria-current="page"' : STAFF_CHANNELS.has(c.id) ? LOCKED : '';
+    return `<a href="${href(c.id)}"${attrs}>${c.title}</a>`;
+  }).join('');
 {
   // The SimpleMotion banner, copied from the welcome page so that the site
   // holds one copy of the image.
@@ -129,11 +140,15 @@ const navHtml = (current: string, href: (c: string) => string): string =>
   if (!raw.includes('<!--SM_BANNER-->')) throw new Error('sm-channel/index.html has no SM_BANNER marker');
   const tmpl = raw.replace('<!--SM_BANNER-->', banner);
   if (!COMMANDS.test(tmpl)) throw new Error('sm-channel/index.html has no SM_COMMANDS markers');
+  if (!tmpl.includes(CHANNEL_SCRIPT)) throw new Error(`sm-channel/index.html has no ${CHANNEL_SCRIPT} marker`);
+  const channelJs = bundle(`${TREE}/sm-channel/sm-channel.ts`);
+  // The script goes in after the placeholder check, because minified code
+  // can contain "{{".
   const fill = (v: Record<string, string>): string => {
     let html = tmpl;
     for (const [k, val] of Object.entries(v)) html = html.split(`{{${k}}}`).join(val);
     if (html.includes('{{')) throw new Error(`page "${v.PAGE_TITLE}" has an unfilled placeholder`);
-    return html;
+    return html.replace(CHANNEL_SCRIPT, () => `<script>${channelJs}</script>`);
   };
   let pages = 0;
   for (const ch of CHANNELS) {
@@ -248,6 +263,19 @@ for (const ch of CHANNELS) {
       const html = readFileSync(page, 'utf8');
       if (!html.includes('<img class="banner"')) throw new Error(`${where} has no SimpleMotion banner`);
       if (!html.includes('<pre><code>')) throw new Error(`${where} has no install commands`);
+      if (html.split('<pre><code>').length !== html.split(COPY_BUTTON).length) {
+        throw new Error(`${where}: every command must have a copy button`);
+      }
+      if (html.includes(CHANNEL_SCRIPT) || !html.includes('/.auth/me')) {
+        throw new Error(`${where} has no channel script`);
+      }
+      for (const c of CHANNELS) {
+        if (c.id === ch.id) continue;
+        const locked = new RegExp(`<a href="[^"]*${c.id}/[^"]*" class="locked"`).test(html);
+        if (locked !== STAFF_CHANNELS.has(c.id)) {
+          throw new Error(`${where}: the ${c.id} link must ${locked ? 'not ' : ''}be grayed out`);
+        }
+      }
       // Every command on a page uses one copy: the external staff pages use
       // the internal copy, and every other page uses its own copy.
       const want = aud === 'external' && !STAFF_CHANNELS.has(ch.id) ? 'external' : 'internal';
@@ -312,21 +340,28 @@ const ROOT_INDEX = `<!doctype html>
 // providers. Its app settings AZURE_CLIENT_ID and
 // OVERRIDE_USE_MI_FIC_ASSERTION_CLIENTID hold the two client IDs. Custom
 // sign-in needs the SWA Standard plan.
+//
+// The external copy uses the same registration (Greg, 2026-10-14), so that a
+// staff member can sign in there and open the staff channels. Its pages stay
+// open. Without a custom registration, the SWA accepts any Microsoft account.
+// The SWA signs in with its own identity, id-sm-portal-install-ext.
 const STAFF_TENANT = '7fdf19e4-d123-4c78-86c6-c68ac5a0d1d2';
 const SIGNIN_PAGE = '/sm-signin.html';
-const INT_SWA_CONFIG = {
-  ...SWA_CONFIG,
-  auth: {
-    identityProviders: {
-      azureActiveDirectory: {
-        registration: {
-          openIdIssuer: `https://login.microsoftonline.com/${STAFF_TENANT}/v2.0`,
-          clientIdSettingName: 'AZURE_CLIENT_ID',
-          clientSecretSettingName: 'OVERRIDE_USE_MI_FIC_ASSERTION_CLIENTID',
-        },
+const STAFF_AUTH = {
+  identityProviders: {
+    azureActiveDirectory: {
+      registration: {
+        openIdIssuer: `https://login.microsoftonline.com/${STAFF_TENANT}/v2.0`,
+        clientIdSettingName: 'AZURE_CLIENT_ID',
+        clientSecretSettingName: 'OVERRIDE_USE_MI_FIC_ASSERTION_CLIENTID',
       },
     },
   },
+};
+const EXT_SWA_CONFIG = { ...SWA_CONFIG, auth: STAFF_AUTH };
+const INT_SWA_CONFIG = {
+  ...SWA_CONFIG,
+  auth: STAFF_AUTH,
   routes: [
     ...SWA_CONFIG.routes,
     { route: '/*.{sh,ps1}', allowedRoles: ['anonymous'] },
@@ -349,7 +384,7 @@ const SIGNIN_HTML = `<!doctype html>
 </html>
 `;
 for (const dir of [INT, EXT]) {
-  const config = dir === INT ? INT_SWA_CONFIG : SWA_CONFIG;
+  const config = dir === INT ? INT_SWA_CONFIG : EXT_SWA_CONFIG;
   writeFileSync(`${dir}/staticwebapp.config.json`, `${JSON.stringify(config, null, 2)}\n`);
   if (existsSync(`${dir}/index.html`)) throw new Error(`${dir}/index.html exists: the root redirect would replace it`);
   writeFileSync(`${dir}/index.html`, ROOT_INDEX);

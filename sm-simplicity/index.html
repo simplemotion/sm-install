@@ -23,6 +23,8 @@
   .channel-btn.active{background:#ff6900;color:#fff}
   .channel-btn:disabled{color:#555;cursor:not-allowed}
   .channel-btn:disabled:hover{color:#555}
+  .signin-row{margin:-12px 0 16px;font-size:0.8rem}
+  .signin{color:#ff6900;text-decoration:none}
   .cmd-box{background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;text-align:left;margin-bottom:0;display:flex;align-items:stretch;min-height:78px;overflow:hidden}
   .cmd-box code{font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:0.82rem;color:#e8e8e8;word-break:normal;overflow-wrap:anywhere;line-height:1.45;flex:1;padding:12px 20px;min-width:0;display:flex;align-items:center;justify-content:center;text-align:center}
   .copy-btn{background:#222;border:1px solid #2a2a2a;border-radius:5px;color:#999;cursor:pointer;transition:all 0.15s;width:72px;height:72px;margin:2px;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
@@ -56,6 +58,7 @@
     <button class="channel-btn" data-channel="testing" type="button" id="testing-btn" disabled title="Restricted to simplemotion.com / simplemotion.global email accounts">Testing</button>
     <button class="channel-btn" data-channel="develop" type="button" id="develop-btn" disabled title="Restricted to simplemotion.com / simplemotion.global email accounts">Develop</button>
   </div>
+  <p class="signin-row"><a class="signin" id="signin" href="/.auth/login/aad" hidden>Staff sign in</a></p>
   <div class="cmd-box">
     <code id="cmd"></code>
     <button class="copy-btn" id="copy-btn" aria-label="Copy command" title="Copy command">

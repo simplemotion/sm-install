@@ -4,6 +4,8 @@
 // bundled + minified by esbuild and inlined into index.html at deploy time
 // (see sm-build.ts + .github/workflows/sm-pages.yml). No hand-written .js.
 
+import { INTERNAL_BASE, STAFF_CHANNELS, signInHref, staffSignedIn } from '../sm-channel/sm-staff.ts';
+
 type Channel = 'release' | 'preview' | 'testing' | 'develop';
 type OS = 'macOS' | 'Windows' | 'Linux';
 
@@ -20,6 +22,10 @@ interface CmdParts {
 // here in the copy that it serves from the external domain.
 const SM_INSTALL_BASE = 'https://install.simplemotion.dev';
 const EXTERNAL = SM_INSTALL_BASE.endsWith('.com');
+// The external installer refuses the staff channels, so a staff member on the
+// external copy gets the commands of the internal copy for them.
+const baseFor = (channel: string): string =>
+  EXTERNAL && STAFF_CHANNELS.includes(channel) ? INTERNAL_BASE : SM_INSTALL_BASE;
 
 (function () {
   const params = new URLSearchParams(window.location.search);
@@ -33,20 +39,23 @@ const EXTERNAL = SM_INSTALL_BASE.endsWith('.com');
     if (span) span.textContent = `, ${name}`;
   }
 
-  // Gate the internal channels (Testing, Develop): enabled only for
-  // simplemotion.com / simplemotion.global accounts. Others see them
-  // disabled with an explanatory tooltip.
-  // The external copy serves the freelance and customers cohorts, which can
-  // read the release and preview channels only. It shows Testing and Develop,
-  // but they stay disabled whatever the email address is.
-  if (EXTERNAL) {
-    for (const id of ['testing-btn', 'develop-btn']) {
-      byId(id)?.setAttribute('title', 'Staff only: use the internal installer site');
-    }
+  // Gate the staff channels (Testing, Develop): available only to a signed-in
+  // staff member (Greg, 2026-10-14). Release and Preview are open to everyone.
+  // The install.simplemotion.dev pages need sign-in, so there the staff
+  // channels are always available. Others see them grayed out, with a staff
+  // sign-in link.
+  for (const id of ['testing-btn', 'develop-btn']) {
+    byId(id)?.setAttribute('title', 'SimpleMotion staff only: sign in to use');
   }
-  const internalAllowed =
-    !EXTERNAL && /@(simplemotion\.com|simplemotion\.global)$/i.test(email);
-  if (internalAllowed) {
+  void staffSignedIn().then((staff) => {
+    if (!staff) {
+      const signIn = byId('signin');
+      if (signIn instanceof HTMLAnchorElement) {
+        signIn.href = signInHref();
+        signIn.hidden = false;
+      }
+      return;
+    }
     for (const id of ['testing-btn', 'develop-btn']) {
       const b = byId(id);
       if (b) {
@@ -54,7 +63,7 @@ const EXTERNAL = SM_INSTALL_BASE.endsWith('.com');
         b.removeAttribute('title');
       }
     }
-  }
+  });
 
   const ua = navigator.userAgent;
   const os: OS = /Mac/i.test(ua) ? 'macOS' : /Win/i.test(ua) ? 'Windows' : 'Linux';
@@ -83,7 +92,7 @@ const EXTERNAL = SM_INSTALL_BASE.endsWith('.com');
       prefix.push(`$env:SM_CHANNEL="${channel}"`);
       return {
         leading: `${prefix.join('; ')}; `,
-        head: `irm ${SM_INSTALL_BASE}/sm-welcome.ps1 | iex`,
+        head: `irm ${baseFor(channel)}/sm-welcome.ps1 | iex`,
         tail: '',
       };
     }
@@ -92,7 +101,7 @@ const EXTERNAL = SM_INSTALL_BASE.endsWith('.com');
     args += `--channel ${channel}`;
     return {
       leading: '',
-      head: `curl -fsSL ${SM_INSTALL_BASE}/sm-welcome.sh | bash -s --`,
+      head: `curl -fsSL ${baseFor(channel)}/sm-welcome.sh | bash -s --`,
       tail: args,
     };
   };
