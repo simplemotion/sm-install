@@ -114,3 +114,26 @@ jobs:
           done
           echo "::error::${host}/sm-install.sh does not match this build" >&2
           exit 1
+
+      # The internal copy needs staff sign-in for its pages, and keeps its
+      # scripts open. Check both as a visitor who has not signed in.
+      - name: Check staff sign-in
+        if: matrix.copy == 'int'
+        run: |
+          set -euo pipefail
+          host="$(az staticwebapp show --name '${{ matrix.swa }}' --resource-group rg-sm-portal-se --query defaultHostname -o tsv)"
+          bad=0
+          for path in release/ sm-simplicity/ release/sm-welcome/; do
+            code="$(curl -s -o page.html -w '%{http_code}' "https://${host}/${path}")"
+            # SWA can send the rewritten sign-in page with 401 or 200.
+            if { [ "$code" = 401 ] || [ "$code" = 200 ]; } && grep -q 'SimpleMotion staff only' page.html && ! grep -q '<pre><code>' page.html; then
+              echo "::notice::/${path} needs sign-in"
+            else
+              echo "::error::/${path} gave HTTP ${code} without sign-in" >&2; bad=1
+            fi
+          done
+          for path in sm-install.sh sm-install.ps1 sm-install-lib.sh sm-welcome.sh sm-simplicity.ps1; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "https://${host}/${path}")"
+            [ "$code" = 200 ] || { echo "::error::/${path} gave HTTP ${code}: the scripts must stay open" >&2; bad=1; }
+          done
+          exit "$bad"
