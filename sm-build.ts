@@ -122,14 +122,15 @@ const commandsHtml = (p: (typeof PRODUCTS)[number], ch: string): string =>
   `  <p class="os">macOS / Linux</p>\n${commandHtml(p.unix(ch))}` +
   `  <p class="os">Windows (PowerShell)</p>\n${commandHtml(p.windows(ch))}`;
 // The build grays out the staff channels. sm-channel.ts makes them available
-// when a staff member has signed in (Greg, 2026-10-14). Release and Preview are open to everyone.
+// when a staff member has signed in (Greg, 2026-10-14). On the internal copy,
+// it also grays out Release and Preview until then. Release and Preview are open to everyone.
 // The current channel stays highlighted, not grayed out.
 const LOCKED = ' class="locked" aria-disabled="true" tabindex="-1" title="SimpleMotion staff only: sign in to open"';
 const navHtml = (current: string, href: (c: string) => string): string =>
   CHANNELS.map((c) => {
     const attrs =
       c.id === current ? ' class="active" aria-current="page"' : STAFF_CHANNELS.has(c.id) ? LOCKED : '';
-    return `<a href="${href(c.id)}"${attrs}>${c.title}</a>`;
+    return `<a href="${href(c.id)}" data-channel="${c.id}"${attrs}>${c.title}</a>`;
   }).join('');
 {
   // The SimpleMotion banner, copied from the welcome page so that the site
@@ -271,7 +272,7 @@ for (const ch of CHANNELS) {
       }
       for (const c of CHANNELS) {
         if (c.id === ch.id) continue;
-        const locked = new RegExp(`<a href="[^"]*${c.id}/[^"]*" class="locked"`).test(html);
+        const locked = new RegExp(`<a href="[^"]*${c.id}/[^"]*" data-channel="${c.id}" class="locked"`).test(html);
         if (locked !== STAFF_CHANNELS.has(c.id)) {
           throw new Error(`${where}: the ${c.id} link must ${locked ? 'not ' : ''}be grayed out`);
         }

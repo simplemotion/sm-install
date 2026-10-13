@@ -12,7 +12,7 @@
 // enterprise "always TS, never JS" rule; bundled + minified by esbuild and
 // inlined into index.html at deploy time (see sm-build.ts).
 
-import { INTERNAL_BASE, STAFF_CHANNELS, signInHref, staffSignedIn } from '../sm-channel/sm-staff.ts';
+import { EXTERNAL_COPY, INTERNAL_BASE, STAFF_CHANNELS, signInHref, staffSignedIn } from '../sm-channel/sm-staff.ts';
 
 type Channel = 'release' | 'preview' | 'testing' | 'develop';
 type OS = 'macOS' | 'Windows' | 'Linux';
@@ -56,6 +56,14 @@ const baseFor = (channel: string): string =>
   }
   void staffSignedIn().then((staff) => {
     if (!staff) {
+      // The internal copy is for the workforce only (Greg, 2026-10-14): there,
+      // every channel and the copy button stay grayed out until sign-in.
+      if (!EXTERNAL_COPY) {
+        for (const b of document.querySelectorAll<HTMLButtonElement>('.channel-btn, #copy-btn')) {
+          b.disabled = true;
+          b.title = 'SimpleMotion staff only: sign in to use';
+        }
+      }
       const signIn = byId('signin');
       if (signIn instanceof HTMLAnchorElement) {
         signIn.href = signInHref();

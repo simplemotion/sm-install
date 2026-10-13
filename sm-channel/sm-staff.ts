@@ -2,7 +2,8 @@
 //
 // Both installer sites sign in with the single-tenant app registration
 // sm-install-dev-signin, so only a simplemotion.com tenant account can sign
-// in. The email check also refuses a guest account in that tenant.
+// in. The email check also refuses a guest account in that tenant. Only a
+// simplemotion.com account is a staff account (Greg, 2026-10-14).
 // This only changes what the pages show. GitHub, not this check, controls
 // access to the staff channels.
 //
@@ -12,11 +13,23 @@
 // The channels that are for SimpleMotion staff only.
 export const STAFF_CHANNELS: readonly string[] = ['testing', 'develop'];
 
+// This copy of the site. The build changes the domain in the external copy.
+const SITE = 'https://install.simplemotion.dev';
+export const EXTERNAL_COPY = SITE.endsWith('.com');
+
+// The channels that a visitor cannot use until a staff member signs in. The
+// internal copy is for the workforce only, so there it is every channel
+// (Greg, 2026-10-14). The internal pages also need sign-in, so this is a
+// second barrier.
+export const LOCKED_CHANNELS: readonly string[] = EXTERNAL_COPY
+  ? STAFF_CHANNELS
+  : ['release', 'preview', ...STAFF_CHANNELS];
+
 // The internal copy. Keep the string in two parts, so that the build does not
 // change it to the external domain in the external copy.
 export const INTERNAL_BASE = ['https://install.simplemotion', 'dev'].join('.');
 
-const STAFF_EMAIL = /@(simplemotion\.com|simplemotion\.global)$/i;
+const STAFF_EMAIL = /@simplemotion\.com$/i;
 
 interface ClientPrincipal {
   userDetails?: string;

@@ -62,12 +62,13 @@ Each copy is its own Azure Static Web App (Greg, 2026-10-12). Both are in `rg-sm
   - A visitor who is not signed in gets `/sm-signin.html`. It sends the visitor to the Microsoft sign-in, then back to the same address with its query. The activation email's `?email=` link continues to work.
   - After each deploy, `sm-pages.yml` checks that the pages need sign-in and that the scripts stay open.
   - This controls who can see the pages. It does not keep anything secret: this repo is public, and internal binaries need GitHub access.
-- **The pages gray out the staff channels until a staff member signs in (Greg, 2026-10-14).** Release and Preview are open to everyone on both domains. The channel nav and the welcome and Simplicity pages gray out Testing and Develop.
-  - `sm-channel/sm-staff.ts` asks `/.auth/me` which account has signed in. It accepts only a `simplemotion.com` or `simplemotion.global` account. Each page script bundles it.
+- **The pages gray out the staff channels until a staff member signs in (Greg, 2026-10-14).** The channel nav and the welcome and Simplicity pages gray out Testing and Develop. On the external copy, Release and Preview are open to everyone.
+  - On the internal copy, the scripts also gray out Release and Preview and turn off the copy buttons until sign-in (Greg, 2026-10-14). It is the workforce site. Its pages also need sign-in, so this is a second barrier.
+  - `sm-channel/sm-staff.ts` asks `/.auth/me` which account has signed in. It accepts only a `simplemotion.com` account (Greg, 2026-10-14). Each page script bundles it.
   - The external copy uses the same single-tenant registration, so a staff member can sign in there. Its pages stay open. Without a custom registration, a SWA accepts any Microsoft account.
   - The external SWA signs in with `id-sm-portal-install-ext`. The app registration must trust that identity, and must list the `install.simplemotion.com` callback.
   - On the external copy, a signed-in staff member gets the internal commands for Testing and Develop, because the external installer refuses those channels.
-  - A grayed-out link is only a display. The pages stay public, and GitHub controls access to the staff channels.
+  - A grayed-out link is only a display. The external pages stay public, and GitHub controls access to the staff channels.
 - Each install command on a channel page has a green copy button on its right. The build fails if a command has no copy button.
 - `sm-build.ts` writes `staticwebapp.config.json` and a root `index.html` into each copy. The config sets the MIME types (`.ps1` and `.html` with a charset) and redirects `/` to `/release/`. The SWA deploy refuses a site with no root `index.html`.
 - DNS: each domain is a CNAME to its SWA's default host in its Azure DNS zone (`simplemotion.dev`, `simplemotion.com`; resource group `sm-dns`). Each SWA validated its domain with a `_dnsauth.install` TXT record. The certificates come from DigiCert (GeoTrust), so a CAA record on either zone must permit `digicert.com`.
