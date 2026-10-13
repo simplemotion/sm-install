@@ -14,18 +14,22 @@
   h1 .ch{color:#ff6900;font-weight:600}
   .subtitle{color:#999;font-size:0.95rem;margin-bottom:24px;line-height:1.5}
   .nav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:28px}
-  .nav a{color:#999;text-decoration:none;padding:6px 14px;border:1px solid #2a2a2a;border-radius:4px;font-size:0.8rem}
-  .nav a.active{background:#ff6900;border-color:#ff6900;color:#fff}
-  .nav a.locked{color:#555;border-color:#1f1f1f;cursor:not-allowed}
-  .nav a.signin{margin-left:auto;color:#ff6900;border-color:#ff6900}
+  /* Every button has one size in every state. Idle: muted fill. Active: full colour. */
+  .nav a,.copy{display:inline-flex;align-items:center;justify-content:center;flex:none;width:104px;height:34px;padding:0;border:1px solid;border-radius:6px;font-family:inherit;font-size:0.8rem;font-weight:600;line-height:1;text-decoration:none;cursor:pointer;transition:background 0.15s,border-color 0.15s,color 0.15s}
+  .nav a{background:#3a2210;border-color:#5c3415;color:#f2b58a}
+  .nav a:hover{background:#55300f}
+  .nav a.active,.nav a:active{background:#ff6900;border-color:#ff6900;color:#fff}
+  .nav a.locked,.nav a.locked:hover{background:#1a1a1a;border-color:#2a2a2a;color:#555;cursor:not-allowed}
+  .nav a.signin{margin-left:auto}
+  .nav a[hidden]{display:none}
   h2{font-size:1.05rem;font-weight:600;margin:24px 0 8px}
   .os{color:#999;font-size:0.8rem;margin:12px 0 4px}
   pre{background:#0a0a0a;border:1px solid #2a2a2a;border-radius:8px;padding:12px 16px;white-space:pre-wrap;overflow-wrap:anywhere;flex:1;min-width:0}
   .cmd{display:flex;gap:8px;align-items:stretch}
-  .copy{flex:none;background:#15803d;border:1px solid #22c55e;border-radius:8px;color:#fff;padding:0 16px;font-family:inherit;font-size:0.8rem;font-weight:600;cursor:pointer}
-  .copy:hover{background:#16a34a}
-  .copy:disabled{background:#1a1a1a;border-color:#2a2a2a;color:#555;cursor:not-allowed}
-  .copy.copied{background:#22c55e;color:#0a0a0a}
+  .copy{background:#14351f;border-color:#1f6b3d;color:#a7f3c0;align-self:center}
+  .copy:hover{background:#1b4a2b}
+  .copy:active,.copy.copied{background:#22c55e;border-color:#22c55e;color:#0a0a0a}
+  .copy:disabled,.copy:disabled:hover{background:#1a1a1a;border-color:#2a2a2a;color:#555;cursor:not-allowed}
   code{font-family:'SF Mono','Fira Code','Courier New',monospace;font-size:0.82rem;color:#e8e8e8}
   .footer a{color:#ff6900;text-decoration:none}
   .crumb{margin-bottom:16px;font-size:0.85rem}

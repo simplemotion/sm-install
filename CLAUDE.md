@@ -70,6 +70,7 @@ Each copy is its own Azure Static Web App (Greg, 2026-10-12). Both are in `rg-sm
   - On the external copy, a signed-in staff member gets the internal commands for Testing and Develop, because the external installer refuses those channels.
   - A grayed-out link is only a display. The external pages stay public, and GitHub controls access to the staff channels.
 - Each install command on a channel page has a green copy button on its right. The build fails if a command has no copy button.
+- Every button has one size, 104 px by 34 px, in every state (Greg, 2026-10-14). An idle button has a muted fill. The current channel, and a copy button that you push, have the full colour: orange for a channel, green for a copy. A locked button is gray.
 - `sm-build.ts` writes `staticwebapp.config.json` and a root `index.html` into each copy. The config sets the MIME types (`.ps1` and `.html` with a charset) and redirects `/` to `/release/`. The SWA deploy refuses a site with no root `index.html`.
 - DNS: each domain is a CNAME to its SWA's default host in its Azure DNS zone (`simplemotion.dev`, `simplemotion.com`; resource group `sm-dns`). Each SWA validated its domain with a `_dnsauth.install` TXT record. The certificates come from DigiCert (GeoTrust), so a CAA record on either zone must permit `digicert.com`.
 - History: GitHub Pages served both domains until 2026-10-12. The external copy was the `gh-pages` branch of `simplemotion/sm-install-ext`, because Pages gives each repo one custom domain.
