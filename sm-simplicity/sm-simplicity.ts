@@ -1,4 +1,9 @@
-// install.simplemotion.dev/sm-simplicity/ setup page — interactive logic.
+// /sm-simplicity/ setup page — interactive logic.
+//
+// Both installer domains serve this page. sm-build.ts writes the external
+// copy for install.simplemotion.com, so customers get the external
+// installer. The SM-Activate email picks the domain by recipient
+// (sm_install_url::Audience::for_email): staff get .dev, customers .com.
 //
 // Sibling of sm-welcome/sm-welcome.ts (same card UX: ?name= greeting,
 // ?email=-gated internal channels, OS detection, copy button); only the
