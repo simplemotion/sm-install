@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["sm-welcome/sm-welcome.ts", "sm-build.ts"]
+  "include": ["sm-welcome/sm-welcome.ts", "sm-simplicity/sm-simplicity.ts", "sm-channel/*.ts", "sm-build.ts"]
 }
