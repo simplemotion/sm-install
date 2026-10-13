@@ -303,10 +303,58 @@ const ROOT_INDEX = `<!doctype html>
 <body><p><a href="release/">SimpleMotion installers: release channel</a></p></body>
 </html>
 `;
+// Staff sign-in on the internal copy only (Greg, 2026-10-13). The pages need
+// an account in the simplemotion.com tenant. The scripts stay open, because
+// curl and irm cannot sign in, and they fetch only the root .sh and .ps1 files.
+// The app registration sm-install-dev-signin is single-tenant. The SWA signs
+// in to it with its managed identity id-sm-portal-install-int, so there is no
+// secret. A custom registration turns off the platform's other sign-in
+// providers. Its app settings AZURE_CLIENT_ID and
+// OVERRIDE_USE_MI_FIC_ASSERTION_CLIENTID hold the two client IDs. Custom
+// sign-in needs the SWA Standard plan.
+const STAFF_TENANT = '7fdf19e4-d123-4c78-86c6-c68ac5a0d1d2';
+const SIGNIN_PAGE = '/sm-signin.html';
+const INT_SWA_CONFIG = {
+  ...SWA_CONFIG,
+  auth: {
+    identityProviders: {
+      azureActiveDirectory: {
+        registration: {
+          openIdIssuer: `https://login.microsoftonline.com/${STAFF_TENANT}/v2.0`,
+          clientIdSettingName: 'AZURE_CLIENT_ID',
+          clientSecretSettingName: 'OVERRIDE_USE_MI_FIC_ASSERTION_CLIENTID',
+        },
+      },
+    },
+  },
+  routes: [
+    ...SWA_CONFIG.routes,
+    { route: '/*.{sh,ps1}', allowedRoles: ['anonymous'] },
+    { route: SIGNIN_PAGE, allowedRoles: ['anonymous'] },
+    { route: '/*', allowedRoles: ['authenticated'], headers: { 'Cache-Control': 'no-store' } },
+  ],
+  // A rewrite keeps the requested address, so the sign-in page can
+  // send the visitor back to it, with its query (the activation email's ?email=).
+  responseOverrides: { '401': { rewrite: SIGNIN_PAGE } },
+};
+const SIGNIN_HTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>SimpleMotion installers: sign in</title>
+<script>location.replace('/.auth/login/aad?post_login_redirect_uri=' + encodeURIComponent(location.pathname + location.search));</script>
+</head>
+<body><p>SimpleMotion staff only. <a href="/.auth/login/aad">Sign in with your SimpleMotion account</a>.</p></body>
+</html>
+`;
 for (const dir of [INT, EXT]) {
-  writeFileSync(`${dir}/staticwebapp.config.json`, `${JSON.stringify(SWA_CONFIG, null, 2)}\n`);
+  const config = dir === INT ? INT_SWA_CONFIG : SWA_CONFIG;
+  writeFileSync(`${dir}/staticwebapp.config.json`, `${JSON.stringify(config, null, 2)}\n`);
   if (existsSync(`${dir}/index.html`)) throw new Error(`${dir}/index.html exists: the root redirect would replace it`);
   writeFileSync(`${dir}/index.html`, ROOT_INDEX);
 }
+if (existsSync(`${INT}${SIGNIN_PAGE}`)) throw new Error(`${INT}${SIGNIN_PAGE} exists: the sign-in page would replace it`);
+writeFileSync(`${INT}${SIGNIN_PAGE}`, SIGNIN_HTML);
 
 console.log(`built ${INT} (${INT_DOMAIN}) and ${EXT} (${EXT_DOMAIN}) — ${urls} URLs changed to the external domain`);
